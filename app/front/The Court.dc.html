@@ -54,11 +54,50 @@
   @keyframes vStagger { 0%,100% { transform:translateX(0) rotate(0);} 18% { transform:translateX(-15px) rotate(-9deg);} 42% { transform:translateX(10px) rotate(7deg);} 66% { transform:translateX(-7px) rotate(-5deg);} 84% { transform:translateX(13px) rotate(8deg);} }
   @keyframes vRum { 0%,100% { transform:rotate(0) translate(0,0);} 28%,60% { transform:rotate(46deg) translate(26px,12px);} 44% { transform:rotate(52deg) translate(30px,16px);} 80% { transform:rotate(0) translate(0,0);} }
   @keyframes vPuff { 0%,52% { transform:scale(.3); opacity:0;} 62% { transform:scale(1); opacity:.9;} 100% { transform:scale(1.6); opacity:0;} }
+
+  /* ── desktop fit ──────────────────────────────────────────────────────────────
+     手机画框内部永远是 390×844，一格都不重排；大屏只是把整块 scale 上去。
+     窄屏（<480px）完全不进这些规则，观感和以前一模一样。 */
+  :root { --mm-scale:1; }
+  .mm-stage { width:100vw; height:100dvh; min-height:560px; background:#1c1a20; display:flex; align-items:center; justify-content:center; }
+  .mm-slot  { flex:none; width:calc(390px * var(--mm-scale)); height:calc(844px * var(--mm-scale)); display:flex; align-items:center; justify-content:center; }
+  .mm-frame { flex:none; }
+  @media (min-width:480px) {
+    :root { --mm-scale:.70; }
+    .mm-stage { overflow:hidden; }
+    .mm-frame { transform:scale(var(--mm-scale)); transform-origin:50% 50%; }
+  }
+  /* 每档都保证 844 × scale ≤ 视口高，所以永远不产生滚动条 */
+  @media (min-width:480px) and (min-height:634px)  { :root { --mm-scale:.75; } }
+  @media (min-width:480px) and (min-height:676px)  { :root { --mm-scale:.80; } }
+  @media (min-width:480px) and (min-height:718px)  { :root { --mm-scale:.85; } }
+  @media (min-width:480px) and (min-height:760px)  { :root { --mm-scale:.90; } }
+  @media (min-width:480px) and (min-height:802px)  { :root { --mm-scale:.95; } }
+  @media (min-width:480px) and (min-height:844px)  { :root { --mm-scale:1; } }
+  @media (min-width:480px) and (min-height:887px)  { :root { --mm-scale:1.05; } }
+  @media (min-width:480px) and (min-height:929px)  { :root { --mm-scale:1.10; } }
+  @media (min-width:480px) and (min-height:971px)  { :root { --mm-scale:1.15; } }
+  @media (min-width:480px) and (min-height:1013px) { :root { --mm-scale:1.20; } }
+  @media (min-width:480px) and (min-height:1055px) { :root { --mm-scale:1.25; } }
+  @media (min-width:480px) and (min-height:1098px) { :root { --mm-scale:1.30; } }
+  @media (min-width:480px) and (min-height:1140px) { :root { --mm-scale:1.35; } }
+
+  /* ── desktop only · 朝堂实录 ── */
+  .mm-log { flex:0 1 400px; min-width:0; margin-left:24px; height:calc(844px * var(--mm-scale)); max-height:100dvh;
+            display:flex; flex-direction:column; background:#2b2733; color:#f1ede4;
+            border:4px solid #b2a181; border-radius:18px; overflow:hidden;
+            font-family:'Baloo 2','ZCOOL KuaiLe',sans-serif; box-shadow:6px 7px 0 rgba(0,0,0,.45); }
+  .mm-log-head { margin:0; padding:14px 16px; display:flex; align-items:baseline; justify-content:space-between; gap:12px;
+                 border-bottom:3px solid rgba(241,237,228,.28); background:rgba(241,237,228,.05); }
+  .mm-log-body { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column-reverse; gap:10px; padding:14px;
+                 scrollbar-color:#b2a181 #2b2733; }
+  .mm-log-body:focus-visible { outline:3px solid #b2a181; outline-offset:-3px; }
 </style>
 </helmet>
 
-<div style="width:100vw; height:100dvh; min-height:560px; background:#1c1a20; display:flex; align-items:center; justify-content:center;">
-<div data-screen-label="The Court · Cel×Type" style="position:relative; width:390px; height:844px; flex-shrink:0; background:#f1ede4; overflow:hidden; display:flex; flex-direction:column; font-family:'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#2b2733;">
+<div class="mm-stage">
+<div class="mm-slot">
+<div class="mm-frame" data-screen-label="The Court · Cel×Type" style="position:relative; width:390px; height:844px; flex-shrink:0; background:#f1ede4; overflow:hidden; display:flex; flex-direction:column; font-family:'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#2b2733;">
 
   <!-- ============================== SCREEN 1 · OPENING ============================== -->
   <sc-if value="{{ scr1 }}" hint-placeholder-val="{{ true }}">
@@ -455,6 +494,35 @@
 </div>
 </div>
 
+<!-- ====================== DESKTOP ONLY · 朝堂实录 / TRANSCRIPT ====================== -->
+<sc-if value="{{ wideOn }}" hint-placeholder-val="{{ false }}">
+<section class="mm-log" aria-label="{{ t.logTitle }}">
+  <h2 class="mm-log-head">
+    <span style="font:400 22px/1.1 {{ dispFont }}; letter-spacing:2px; color:#f1ede4;">📜 {{ t.logTitle }}</span>
+    <span style="font:800 11px/1 'Baloo 2',sans-serif; letter-spacing:1.5px; color:#b2a181;">{{ logCount }}</span>
+  </h2>
+  <div class="mm-log-body" tabIndex="0" role="log" aria-label="{{ t.logTitle }}">
+    <sc-if value="{{ logEmpty }}" hint-placeholder-val="{{ true }}">
+      <p style="margin:auto 0; text-align:center; font:600 14px/1.7 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#a9a3ab;">{{ t.logEmpty }}</p>
+    </sc-if>
+    <sc-for list="{{ transcript }}" as="q" hint-placeholder-count="3">
+      <article style="flex:none; display:flex; gap:10px; padding:10px 12px; border-left:5px solid {{ q.stance }}; border-radius:4px 12px 12px 4px; background:{{ q.rowBg }};">
+        <span aria-hidden="true" style="flex:none; width:34px; height:34px; border-radius:50%; border:2.5px solid #f1ede4; background:rgba(241,237,228,.1); display:flex; align-items:center; justify-content:center; font-size:20px;">{{ q.head }}</span>
+        <div style="min-width:0;">
+          <div style="display:flex; flex-wrap:wrap; align-items:baseline; gap:8px;">
+            <b style="font:400 15px/1.2 {{ dispFont }}; letter-spacing:1px; color:{{ q.nameCol }};">{{ q.name }}</b>
+            <span style="font:800 10px/1.2 'Baloo 2',sans-serif; letter-spacing:1.2px; color:#a9a3ab;">{{ q.meta }}</span>
+          </div>
+          <p style="margin:5px 0 0; font:600 14px/1.55 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#f1ede4; overflow-wrap:anywhere;">{{ q.text }}</p>
+        </div>
+      </article>
+    </sc-for>
+  </div>
+</section>
+</sc-if>
+
+</div>
+
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{
   &quot;$preview&quot;: { &quot;width&quot;: 390, &quot;height&quot;: 844 },
@@ -463,7 +531,7 @@
 }">
 class Component extends DCLogic {
   state = { screen: 1, lang: 'en', duelTurn: 0, poke: null, lobPhase: 0, lobSc: 'A', fishCamp: 'pro', rotTick: 0, itvOpen: false, itv: null, castPoke: null, pairIdx: 0, cut: null,
-            topic: '', ctx: '', sid: null, live: null, feed: [], phase: 'idle', err: '' };
+            topic: '', ctx: '', sid: null, live: null, feed: [], phase: 'idle', err: '', wide: false };
 
   // ---- 后端 ----
   // phase: idle 还没开堂 · opening 等十一位大臣表态 · debating 直播中 · recess 辩完待裁决 · offline 后端不在
@@ -566,6 +634,11 @@ class Component extends DCLogic {
       }
     }, 9500);
     this._lobT.push(setTimeout(runLobby, 3000));
+    // 宽屏才挂朝堂实录；窄屏下 sc-if 直接不渲染，一个占位都不留
+    this._mq = window.matchMedia('(min-width:1024px)');
+    this._onMq = () => this.setState({ wide: this._mq.matches });
+    this._mq.addEventListener('change', this._onMq);
+    this._onMq();
   }
 
   componentWillUnmount() {
@@ -578,6 +651,7 @@ class Component extends DCLogic {
     (this._lobT || []).forEach(clearTimeout);
     clearTimeout(this._pk);
     clearTimeout(this._cpT);
+    if (this._mq) this._mq.removeEventListener('change', this._onMq);
     this.closeStream();
   }
 
@@ -926,6 +1000,10 @@ class Component extends DCLogic {
       itvOpt1:'拍案肃静', itvOpt1Sub:'拍案震殿，满堂闭嘴', itvOpt2:'朱笔换将', itvOpt2Sub:'朱笔一挥，换新对手上台', itvOpt3:'宣香蕉发言', itvOpt3Sub:'香蕉雨伺候，让最离谱的上台',
       itvToastSilence:'奉旨：满殿肃静！', itvToastSwap:'奉旨：朱笔一挥，换将再战！', itvToastBanana:'奉旨：宣香蕉大臣发言！',
       timeStop:'时停 · 特写', cutSoloTag:'单人特写', cutDuoTag:'双人交锋', closeupBtn:'特写',
+      logTitle:'朝堂实录', logEmpty:'尚无发言。递上奏章、开堂，众卿说的每一句都会逐条落在这里。',
+      logKind:{ opening:'表态', rebuttal:'驳斥', lobby:'游说', decree:'圣旨', verdict:'判词' },
+      logStance:{ pro:'赞成', con:'反对', undecided:'中立' },
+      logEmperor:'猫皇', logUnit:' 条',
     };
     const T_EN = {
       epChip:'EP.108 · A DAILY SHOW',
@@ -970,6 +1048,10 @@ class Component extends DCLogic {
       itvOpt1:'SLAM — SILENCE!', itvOpt1Sub:'The bench rattles. Everyone shuts up.', itvOpt2:'VERMILION SWAP', itvOpt2Sub:'One brushstroke — fresh duelists', itvOpt3:'CALL ON BANANA', itvOpt3Sub:'Banana rain. Chaos has the floor.',
       itvToastSilence:'BY DECREE: SILENCE!', itvToastSwap:'BY DECREE: NEW DUELISTS TAKE THE FLOOR!', itvToastBanana:'BY DECREE: BANANA HAS THE FLOOR!',
       timeStop:'TIME STOP · CLOSE-UP', cutSoloTag:'SOLO', cutDuoTag:'DUO CLASH', closeupBtn:'CLOSE-UP',
+      logTitle:'COURT TRANSCRIPT', logEmpty:'No lines yet. File a petition and open court — every word lands here, in order.',
+      logKind:{ opening:'OPENING', rebuttal:'REBUTTAL', lobby:'LOBBY', decree:'DECREE', verdict:'VERDICT' },
+      logStance:{ pro:'PRO', con:'CON', undecided:'SWING' },
+      logEmperor:'THE EMPEROR', logUnit:' LINES',
     };
     const t = zh ? T_ZH : T_EN;
 
@@ -1244,6 +1326,33 @@ class Component extends DCLogic {
       ticketQuote: t.ticketQuote,
       ticketByline: t.ticketByline,
       ticketHead: '🐰',
+
+      // ---- 电脑端多出来的那一栏：朝堂实录 ----
+      // live 为 null（纯设计稿 / 后端没起）时 transcript 是空数组，面板只显示一句占位。
+      wideOn: this.state.wide,
+      logEmpty: !(L && L.turns && L.turns.length),
+      logCount: ((L && L.turns) ? L.turns.length : 0) + t.logUnit,
+      transcript: (() => {
+        const mm = this.minMeta();
+        const stColor = { pro:'#a4726a', con:'#b2a181', undecided:'#a9a3ab' };
+        // column-reverse 的容器里，DOM 第一条显示在最下面，所以倒过来排 = 新发言总在底部且自动跟随
+        return ((L && L.turns) || []).slice().reverse().map(q => {
+          const emp = q.minister === 'emperor';
+          const M = mm[q.minister];
+          const bits = [t.logKind[q.kind] || q.kind];
+          if (t.logStance[q.stance]) bits.push(t.logStance[q.stance]);
+          if (q.target && mm[q.target]) bits.push('→ ' + (zh ? mm[q.target].zh : mm[q.target].en));
+          return {
+            head: emp ? '😾' : (M ? M.head : '❔'),
+            name: emp ? t.logEmperor : (M ? (zh ? M.zh : M.en) : q.minister),
+            meta: bits.join(' · '),
+            text: q.text,
+            stance: emp ? '#f1ede4' : (stColor[q.stance] || '#847d88'),
+            rowBg: emp ? 'rgba(164,114,106,.32)' : 'rgba(241,237,228,.05)',
+            nameCol: emp ? '#f1ede4' : '#b2a181',
+          };
+        });
+      })(),
 
       // 有真数据就用真数据覆盖上面这些演示值
       ...this.liveView(),

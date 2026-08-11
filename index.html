@@ -96,8 +96,8 @@
   <h1>THE MINISTERS <span>· 监控台</span></h1>
   <span class="muted" id="dbline"></span>
   <span class="grow"></span>
-  <a href="./app/front/The%20Court.dc.html">进朝堂 →</a>
-  <a href="https://github.com/dxj1031" id="repo">源码</a>
+  <a href="./app/front/The%20Court.dc.html" id="courtlink">进朝堂 →</a>
+  <a href="https://github.com/dxj1031/personal-page/tree/main/ministers">源码</a>
   <button id="auto" aria-pressed="false">自动刷新 5s</button>
   <button id="refresh">刷新</button>
 </header>
@@ -174,6 +174,8 @@ async function pickSource() {
   const r = await fetch('./snapshot.json');
   if (!r.ok) throw new Error('后端没起，也没有 snapshot.json');
   SNAP = await r.json();
+  // 部署版里游戏就在同目录的 index.html，本地是 FastAPI 挂的静态目录 —— 一行改掉，省一个构建步骤
+  $('#courtlink').href = './index.html';
   $('#banner').hidden = false;
   $('#exported').textContent = SNAP.exported_at;
   $('#auto').hidden = true;
