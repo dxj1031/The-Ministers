@@ -92,6 +92,8 @@
   .mm-log-body { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column-reverse; gap:10px; padding:14px;
                  scrollbar-color:#b2a181 #2b2733; }
   .mm-log-body:focus-visible { outline:3px solid #b2a181; outline-offset:-3px; }
+  /* sc-if 已经不渲染了；这条只是兜底，保证窄屏任何一帧都不可能占位 */
+  @media (max-width:1023px) { .mm-log { display:none; } }
 </style>
 </helmet>
 
