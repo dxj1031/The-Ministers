@@ -1,0 +1,199 @@
+"""SQLite 数据层：朝会、发言、LLM 调用轨迹。
+
+ponytail: 直接写 SQL，不上 ORM —— 表就四张，而且这里的目的之一就是练真 SQL。
+换 Postgres 的路径见 schema.sql 顶部注释。
+"""
+import json
+import os
+import sqlite3
+import uuid
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+
+
+def _dotenv() -> None:
+    """读根目录 .env。ponytail: 只为省一个 python-dotenv 依赖，已存在的环境变量优先。"""
+    f = ROOT / ".env"
+    if not f.exists():
+        return
+    for line in f.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+_dotenv()  # 必须在下面读 MINISTERS_DB 之前，也在 llm.py 读 OPENAI_* 之前
+
+DB_PATH = os.environ.get("MINISTERS_DB", str(ROOT / "data" / "ministers.db"))
+SCHEMA = Path(__file__).with_name("schema.sql")
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+@contextmanager
+def conn():
+    Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    c = sqlite3.connect(DB_PATH)
+    c.row_factory = sqlite3.Row
+    c.execute("PRAGMA foreign_keys=ON")
+    try:
+        yield c
+        c.commit()
+    finally:
+        c.close()
+
+
+def init_db() -> None:
+    with conn() as c:
+        c.executescript(SCHEMA.read_text(encoding="utf-8"))
+
+
+def _rows(cur):
+    return [dict(r) for r in cur.fetchall()]
+
+
+# ---------- 朝会 ----------
+
+def create_session(topic: str, context: str = "", lang: str = "zh") -> str:
+    sid = uuid.uuid4().hex[:12]
+    with conn() as c:
+        c.execute(
+            "INSERT INTO court_session (id, topic, context, lang, created_at) VALUES (?,?,?,?,?)",
+            (sid, topic, context, lang, now()),
+        )
+    return sid
+
+
+def set_lean(session_id: str, lean: float) -> None:
+    with conn() as c:
+        c.execute("UPDATE court_session SET lean=? WHERE id=?", (max(-1.0, min(1.0, lean)), session_id))
+
+
+def end_session(session_id: str, verdict: str) -> None:
+    with conn() as c:
+        c.execute(
+            "UPDATE court_session SET status='decided', verdict=?, ended_at=? WHERE id=?",
+            (verdict, now(), session_id),
+        )
+
+
+def get_session(session_id: str) -> dict | None:
+    with conn() as c:
+        row = c.execute("SELECT * FROM court_session WHERE id=?", (session_id,)).fetchone()
+        if row is None:
+            return None
+        s = dict(row)
+        s["turns"] = _rows(c.execute("SELECT * FROM turn WHERE session_id=? ORDER BY seq", (session_id,)))
+        return s
+
+
+def list_sessions(limit: int = 50) -> list[dict]:
+    with conn() as c:
+        return _rows(c.execute(
+            """SELECT s.*,
+                      (SELECT COUNT(*) FROM turn t WHERE t.session_id = s.id)          AS turns,
+                      (SELECT COUNT(*) FROM llm_trace x WHERE x.session_id = s.id)     AS calls,
+                      (SELECT COALESCE(SUM(cost_usd),0) FROM llm_trace x
+                         WHERE x.session_id = s.id)                                    AS cost_usd
+               FROM court_session s ORDER BY s.created_at DESC LIMIT ?""",
+            (limit,),
+        ))
+
+
+# ---------- 发言 ----------
+
+def add_turn(session_id: str, minister: str, kind: str, stance: str,
+             text: str, influence: float = 0.0, target: str | None = None) -> int:
+    with conn() as c:
+        seq = c.execute("SELECT COALESCE(MAX(seq), 0) + 1 FROM turn WHERE session_id=?",
+                        (session_id,)).fetchone()[0]
+        cur = c.execute(
+            """INSERT INTO turn (session_id, seq, minister, kind, stance, influence, text, target, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (session_id, seq, minister, kind, stance, influence, text, target, now()),
+        )
+        return cur.lastrowid
+
+
+def current_stances(session_id: str) -> dict[str, dict]:
+    """每位大臣最新一次发言时的立场 —— 朝堂当前状态就是发言记录推出来的，不另存一份。"""
+    with conn() as c:
+        rows = _rows(c.execute(
+            """SELECT t.minister, t.stance, t.influence, t.seq
+                 FROM turn t
+                 JOIN (SELECT minister, MAX(seq) AS m FROM turn WHERE session_id=? GROUP BY minister) x
+                   ON x.minister = t.minister AND x.m = t.seq
+                WHERE t.session_id=?""",
+            (session_id, session_id),
+        ))
+    return {r["minister"]: r for r in rows}
+
+
+# ---------- LLM 轨迹 ----------
+
+def add_trace(op: str, model: str, *, session_id: str | None = None, turn_id: int | None = None,
+              minister: str | None = None, prompt_tokens: int = 0, completion_tokens: int = 0,
+              cost_usd: float = 0.0, latency_ms: int = 0, ok: bool = True, fallback: bool = False,
+              error: str | None = None, request=None, response: str | None = None) -> int:
+    with conn() as c:
+        cur = c.execute(
+            """INSERT INTO llm_trace (session_id, turn_id, op, minister, model, prompt_tokens,
+                                      completion_tokens, cost_usd, latency_ms, ok, fallback,
+                                      error, request, response, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (session_id, turn_id, op, minister, model, prompt_tokens, completion_tokens,
+             cost_usd, latency_ms, int(ok), int(fallback), error,
+             json.dumps(request, ensure_ascii=False) if request is not None else None,
+             response, now()),
+        )
+        return cur.lastrowid
+
+
+def count_traces(session_id: str, op: str) -> int:
+    """回合数只能按模型调用次数算 —— 按发言条数算的话，模型少写一句就少算一轮。"""
+    with conn() as c:
+        return c.execute("SELECT COUNT(*) FROM llm_trace WHERE session_id=? AND op=?",
+                         (session_id, op)).fetchone()[0]
+
+
+def list_traces(session_id: str | None = None, limit: int = 200) -> list[dict]:
+    sql = "SELECT * FROM llm_trace"
+    args: list = []
+    if session_id:
+        sql += " WHERE session_id=?"
+        args.append(session_id)
+    sql += " ORDER BY id DESC LIMIT ?"
+    args.append(limit)
+    with conn() as c:
+        return _rows(c.execute(sql, args))
+
+
+def stats() -> dict:
+    """监控台顶部指标。"""
+    with conn() as c:
+        total = dict(c.execute(
+            """SELECT COUNT(*)                              AS calls,
+                      COALESCE(SUM(prompt_tokens), 0)       AS prompt_tokens,
+                      COALESCE(SUM(completion_tokens), 0)   AS completion_tokens,
+                      COALESCE(SUM(cost_usd), 0)            AS cost_usd,
+                      COALESCE(AVG(latency_ms), 0)          AS avg_latency_ms,
+                      COALESCE(SUM(1 - ok), 0)              AS errors,
+                      COALESCE(SUM(fallback), 0)            AS fallbacks
+               FROM llm_trace"""
+        ).fetchone())
+        total["sessions"] = c.execute("SELECT COUNT(*) FROM court_session").fetchone()[0]
+        total["by_op"] = _rows(c.execute(
+            """SELECT op, COUNT(*) AS calls, COALESCE(AVG(latency_ms),0) AS avg_latency_ms,
+                      COALESCE(SUM(cost_usd),0) AS cost_usd, COALESCE(SUM(1-ok),0) AS errors
+               FROM llm_trace GROUP BY op ORDER BY calls DESC"""
+        ))
+        # p95 延迟：小表直接排序取分位，够用。
+        lat = [r[0] for r in c.execute("SELECT latency_ms FROM llm_trace ORDER BY latency_ms").fetchall()]
+        total["p95_latency_ms"] = lat[min(len(lat) - 1, int(len(lat) * 0.95))] if lat else 0
+        return total

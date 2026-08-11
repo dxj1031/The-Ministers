@@ -1,0 +1,30 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ministers",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "app.back.main:app", "--reload", "--port", "8010"],
+      "port": 8010
+    },
+    {
+      "name": "ministers-pages",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8011", "--directory", "E:/The Ministers"],
+      "port": 8011
+    },
+    {
+      "name": "personal-page",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "E:/StudyData/work/Personal Page"],
+      "port": 8765
+    },
+    {
+      "name": "state-tides",
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "npm", "--prefix", "C:/Users/dxj10/Documents/New project", "run", "dev", "--", "--hostname", "127.0.0.1", "--port", "3002"],
+      "port": 3002,
+      "url": "http://127.0.0.1:3002"
+    }
+  ]
+}
