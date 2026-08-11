@@ -1118,6 +1118,12 @@ class Component extends DCLogic {
     const cS = this.state.cut;
     const soloV = (cS && cS.mode === 'solo') ? this.vig()[cS.id][cS.v || 0] : null;
 
+    // 实录的底稿 = 后端快照 live.turns，再把还没进快照的那几条 SSE 新发言（feed）按 seq 补在后面。
+    // 快照是每轮才推一次的，不补的话新台词要等一整轮才上墙。只读，不动数据层。
+    const baseTurns = (L && L.turns) || [];
+    const lastSeq = baseTurns.length ? baseTurns[baseTurns.length - 1].seq : 0;
+    const logTurns = baseTurns.concat((this.state.feed || []).filter(x => x && x.seq > lastSeq));
+
     return {
       scr1: s === 1, scr2: s === 2, scr3: s === 3, scr4: s === 4, scr5: s === 5,
       go1: go(1), go2: go(2), go3: go(3), go4: go(4), go5: go(5),
@@ -1332,17 +1338,18 @@ class Component extends DCLogic {
       // ---- 电脑端多出来的那一栏：朝堂实录 ----
       // live 为 null（纯设计稿 / 后端没起）时 transcript 是空数组，面板只显示一句占位。
       wideOn: this.state.wide,
-      logEmpty: !(L && L.turns && L.turns.length),
-      logCount: ((L && L.turns) ? L.turns.length : 0) + t.logUnit,
+      logEmpty: !logTurns.length,
+      logCount: logTurns.length + t.logUnit,
       transcript: (() => {
         const mm = this.minMeta();
         const stColor = { pro:'#a4726a', con:'#b2a181', undecided:'#a9a3ab' };
         // column-reverse 的容器里，DOM 第一条显示在最下面，所以倒过来排 = 新发言总在底部且自动跟随
-        return ((L && L.turns) || []).slice().reverse().map(q => {
+        return logTurns.slice().reverse().map(q => {
           const emp = q.minister === 'emperor';
           const M = mm[q.minister];
           const bits = [t.logKind[q.kind] || q.kind];
-          if (t.logStance[q.stance]) bits.push(t.logStance[q.stance]);
+          // 皇帝没有立场，后端给的 undecided 不该显示成「中立」
+          if (!emp && t.logStance[q.stance]) bits.push(t.logStance[q.stance]);
           if (q.target && mm[q.target]) bits.push('→ ' + (zh ? mm[q.target].zh : mm[q.target].en));
           return {
             head: emp ? '😾' : (M ? M.head : '❔'),
