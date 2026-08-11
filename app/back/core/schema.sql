@@ -51,3 +51,37 @@ CREATE TABLE IF NOT EXISTS llm_trace (
 
 CREATE INDEX IF NOT EXISTS idx_trace_session ON llm_trace (session_id, id);
 CREATE INDEX IF NOT EXISTS idx_trace_created ON llm_trace (created_at);
+
+-- 蝴蝶文库：浣熊往里存"事实"，蝴蝶检索出来编织成自证的结论。
+-- vec 是原始 float32 数组的字节；语料就这么大，全量算余弦比引入向量库便宜得多。
+CREATE TABLE IF NOT EXISTS fact (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id  TEXT,                              -- NULL = 跨朝会的公共文库
+  text        TEXT NOT NULL,
+  source      TEXT NOT NULL DEFAULT 'unknown',   -- petition | raccoon | user
+  vec         BLOB,
+  dim         INTEGER NOT NULL DEFAULT 0,
+  vectorizer  TEXT NOT NULL DEFAULT '',          -- 模型名，或 hashing（离线兜底）
+  created_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_fact_session ON fact (session_id);
+
+-- 每次检索一行：命中了什么、分数多高、蝴蝶最后引用了几条。
+-- 检索到的和真去引用的之间的差，就是"确认偏误"的可量化形式。
+CREATE TABLE IF NOT EXISTS retrieval (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id  TEXT,
+  turn_id     INTEGER,
+  minister    TEXT,
+  query       TEXT NOT NULL,
+  vectorizer  TEXT NOT NULL DEFAULT '',
+  corpus      INTEGER NOT NULL DEFAULT 0,        -- 检索时文库里有多少条
+  hits        TEXT NOT NULL DEFAULT '[]',        -- JSON: [{fact_id, score, text}]
+  top_score   REAL NOT NULL DEFAULT 0,
+  cited       INTEGER NOT NULL DEFAULT 0,        -- 命中里被真正引用的条数
+  latency_ms  INTEGER NOT NULL DEFAULT 0,
+  created_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_retrieval_session ON retrieval (session_id, id);

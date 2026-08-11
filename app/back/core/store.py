@@ -174,6 +174,71 @@ def list_traces(session_id: str | None = None, limit: int = 200) -> list[dict]:
         return _rows(c.execute(sql, args))
 
 
+# ---------- 蝴蝶文库 ----------
+
+def add_fact(text: str, *, source: str = "unknown", session_id: str | None = None,
+             vec: bytes | None = None, dim: int = 0, vectorizer: str = "") -> int:
+    with conn() as c:
+        cur = c.execute(
+            """INSERT INTO fact (session_id, text, source, vec, dim, vectorizer, created_at)
+               VALUES (?,?,?,?,?,?,?)""",
+            (session_id, text.strip(), source, vec, dim, vectorizer, now()),
+        )
+        return cur.lastrowid
+
+
+def fact_exists(session_id: str | None, text: str) -> bool:
+    sql = "SELECT 1 FROM fact WHERE text=? AND session_id IS ?"
+    with conn() as c:
+        return c.execute(sql, (text.strip(), session_id)).fetchone() is not None
+
+
+def list_facts(session_id: str | None = None) -> list[dict]:
+    """本局的事实 + 公共文库（session_id IS NULL）。"""
+    with conn() as c:
+        return _rows(c.execute(
+            "SELECT * FROM fact WHERE session_id IS NULL OR session_id = ? ORDER BY id",
+            (session_id,),
+        ))
+
+
+def add_retrieval(query: str, *, session_id: str | None = None, turn_id: int | None = None,
+                  minister: str | None = None, vectorizer: str = "", corpus: int = 0,
+                  hits: list | None = None, top_score: float = 0.0,
+                  latency_ms: int = 0) -> int:
+    with conn() as c:
+        cur = c.execute(
+            """INSERT INTO retrieval (session_id, turn_id, minister, query, vectorizer,
+                                      corpus, hits, top_score, cited, latency_ms, created_at)
+               VALUES (?,?,?,?,?,?,?,?,0,?,?)""",
+            (session_id, turn_id, minister, query, vectorizer, corpus,
+             json.dumps(hits or [], ensure_ascii=False), top_score, latency_ms, now()),
+        )
+        return cur.lastrowid
+
+
+def set_last_cited(session_id: str, cited: int) -> None:
+    with conn() as c:
+        c.execute("""UPDATE retrieval SET cited=? WHERE id =
+                     (SELECT MAX(id) FROM retrieval WHERE session_id=?)""",
+                  (cited, session_id))
+
+
+def list_retrievals(session_id: str | None = None, limit: int = 100) -> list[dict]:
+    sql = "SELECT * FROM retrieval"
+    args: list = []
+    if session_id:
+        sql += " WHERE session_id=?"
+        args.append(session_id)
+    sql += " ORDER BY id DESC LIMIT ?"
+    args.append(limit)
+    with conn() as c:
+        rows = _rows(c.execute(sql, args))
+    for r in rows:
+        r["hits"] = json.loads(r["hits"])
+    return rows
+
+
 def stats() -> dict:
     """监控台顶部指标。"""
     with conn() as c:
@@ -196,4 +261,16 @@ def stats() -> dict:
         # p95 延迟：小表直接排序取分位，够用。
         lat = [r[0] for r in c.execute("SELECT latency_ms FROM llm_trace ORDER BY latency_ms").fetchall()]
         total["p95_latency_ms"] = lat[min(len(lat) - 1, int(len(lat) * 0.95))] if lat else 0
+        total["rag"] = dict(c.execute(
+            """SELECT COUNT(*)                                    AS searches,
+                      COALESCE(SUM(CASE WHEN top_score > 0 THEN 1 ELSE 0 END), 0) AS with_hits,
+                      COALESCE(AVG(top_score), 0)                 AS avg_top_score,
+                      COALESCE(AVG(latency_ms), 0)                AS avg_latency_ms,
+                      COALESCE(SUM(json_array_length(hits)), 0)   AS retrieved,
+                      COALESCE(SUM(cited), 0)                     AS cited
+               FROM retrieval"""
+        ).fetchone())
+        total["rag"]["facts"] = c.execute("SELECT COUNT(*) FROM fact").fetchone()[0]
+        total["rag"]["vectorizers"] = _rows(c.execute(
+            "SELECT vectorizer, COUNT(*) AS n FROM fact GROUP BY vectorizer ORDER BY n DESC"))
         return total

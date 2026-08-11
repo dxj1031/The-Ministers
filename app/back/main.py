@@ -56,6 +56,7 @@ def session(session_id: str):
     if s is None:
         raise HTTPException(404, "no such session")
     s["traces"] = store.list_traces(session_id)
+    s["retrievals"] = store.list_retrievals(session_id)
     return s
 
 

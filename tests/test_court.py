@@ -30,7 +30,11 @@ def main():
     assert len(tr) >= 1 and tr[0]["ok"] == 0 and tr[0]["fallback"] == 1, tr[0]
 
     for i in range(court.ROUNDS_PER_SESSION):
+        before = len([t for t in s["turns"] if t["kind"] == "rebuttal"])
         s = court.next_round(s["id"])
+        # 每轮必须正好两句对呛：模型少写一句或者自己换人上场，都不能让回合结构塌掉
+        after = len([t for t in s["turns"] if t["kind"] == "rebuttal"])
+        assert after - before == 2, (i, before, after)
         # 回合数按模型调用次数算：模型少写一句台词也不能让回合白跑一遍（会多花一倍钱）
         assert s["round"] == i + 1, (i, s["round"])
         assert s["rounds_left"] == court.ROUNDS_PER_SESSION - i - 1, s
@@ -60,6 +64,41 @@ def main():
         raise AssertionError("不存在的 session 应该抛 KeyError")
     except KeyError:
         pass
+
+    malformed_shapes()
+    print_ok(s, st)
+
+
+def malformed_shapes():
+    """模型返回的 JSON 形状不对时不能 500 —— 真机上就撞过一次：
+    clash 说好是对象数组，模型给了字符串数组，next_round 直接崩。"""
+    import app.back.core.llm as llm_mod
+
+    bad = [
+        {"ministers": ["fox", "rabbit"]},                       # 该是对象，给了数组
+        {"ministers": {"fox": "此事必有蹊跷"}},                   # 该是对象，给了字符串
+        {"clash": ["甲说", "乙说"], "lobby": "拉票"},             # 两个都该是对象
+        {"clash": [{"minister": "不存在的大臣", "text": "x"}]},   # 大臣 id 不在名册里
+        {"clash": None, "lobby": None},
+        {"edict": ["不是字符串"]},
+        {},
+    ]
+    real = llm_mod.complete_json
+    for shape in bad:
+        llm_mod.complete_json = lambda *a, _s=shape, **k: (_s, 0)
+        try:
+            sid = court.open_court("形状测试", "背景")["id"]
+            for _ in range(2):
+                court.next_round(sid)
+            snap = court.verdict(sid, "shelve")
+            assert sum(snap["tally"].values()) == 11, (shape, snap["tally"])
+            assert snap["status"] == "decided"
+        finally:
+            llm_mod.complete_json = real
+    print(f"malformed OK · {len(bad)} 种畸形输出都没崩")
+
+
+def print_ok(s, st):
 
     print(f"court OK · {len(s['turns'])} turns · {st['calls']} calls · tally={s['tally']}")
 

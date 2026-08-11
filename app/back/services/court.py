@@ -10,6 +10,7 @@ import json
 
 from ..core import llm, store
 from ..ministers import roster
+from . import library
 
 STANCES = ("pro", "con", "undecided")
 LANG_RULE = {"zh": "所有台词用中文。", "en": "Write every line of dialogue in English."}
@@ -21,6 +22,15 @@ ROUNDS_PER_SESSION = 5
 
 def _seed(*parts: str) -> int:
     return int(hashlib.sha256("|".join(parts).encode()).hexdigest()[:8], 16)
+
+
+def _as_dict(x) -> dict:
+    """模型的 JSON 形状不可信：说好返回对象数组，它可能给字符串数组。
+
+    complete_json 只保证顶层是对象，嵌套结构由调用方自己防 —— 少一个 isinstance
+    就是一个 500，而这个项目的前提是模型再离谱产品也不能崩。
+    """
+    return x if isinstance(x, dict) else {}
 
 
 def _fallback_open(topic: str, lang: str = "zh") -> dict:
@@ -44,6 +54,8 @@ OPEN_SYS = """你是一场荒诞朝堂喜剧的编剧。十一位动物大臣要
 
 def open_court(topic: str, context: str = "", lang: str = "zh") -> dict:
     sid = store.create_session(topic, context, lang)
+    # 奏章背景切句入库，蝴蝶后面就有东西可检索。没有背景就等浣熊往里存。
+    library.add_facts(library.split_sentences(context), session_id=sid, source="petition")
     prompt = (f"议题：{topic}\n背景：{context or '（无）'}\n\n大臣名册：\n{roster.roster_block(lang)}\n\n"
               '返回 JSON：{"ministers":{"大臣id":{"stance":"pro|con|undecided","text":"开场白"}, ...}}，'
               "十一位全部要有。至少 3 位 pro、至少 3 位 con。")
@@ -52,9 +64,9 @@ def open_court(topic: str, context: str = "", lang: str = "zh") -> dict:
          {"role": "user", "content": prompt}],
         op="stance", session_id=sid, max_tokens=1200, fallback=_fallback_open(topic, lang))
 
-    mins = data.get("ministers") or {}
+    mins = _as_dict(data.get("ministers"))
     for mid in roster.IDS:
-        m = mins.get(mid) or {}
+        m = _as_dict(mins.get(mid))
         stance = m.get("stance") if m.get("stance") in STANCES else "undecided"
         text = (m.get("text") or "……").strip()
         store.add_turn(sid, mid, "opening", stance, text, influence=roster.ROSTER[mid]["weight"])
@@ -110,6 +122,15 @@ def next_round(session_id: str) -> dict:
     undecided = sum(1 for v in stances.values() if v["stance"] == "undecided")
     forced = undecided > MAX_UNDECIDED and not flipped
 
+    # 本轮会开口的人：对呛双方 + 游说双方
+    speakers = set(duel or ()) | set(lob or ())
+
+    # 蝴蝶只要上场就先查文库 —— 这是它人设的机制化：先有结论，再去找支持它的材料
+    hits = []
+    if "moth" in speakers:
+        hits = library.search(f"{s['topic']} {s['context']}".strip(),
+                              session_id=session_id, minister="moth")
+
     key = "catch" if s["lang"] == "zh" else "catch_en"
     fb = {"clash": [{"minister": d, "text": roster.ROSTER[d][key]} for d in (duel or [])],
           "lobby": ({"text": roster.ROSTER[lob[0]][key]} if lob else None)}
@@ -124,6 +145,9 @@ def next_round(session_id: str) -> dict:
                   + (f"对呛双方：{duel[0]} vs {duel[1]}\n" if duel else "对呛：无\n")
                   + (f"游说：{lob[0]} 去拉 {lob[1]}，flip={flipped}（true 表示 {lob[1]} 倒戈到 "
                      f"{new_stance}，false 表示顶住了）\n" if lob else "游说：无\n")
+                  + (("蝴蝶（moth）从文库里查到这些材料，它只会挑对自己立场有利的引用，"
+                      "不利的直接无视：\n"
+                      + "\n".join(f"- {h['text']}" for h in hits) + "\n\n") if hits else "")
                   + '返回 JSON：{"clash":[{"minister":"id","text":"…"},{"minister":"id","text":"…"}],'
                     '"lobby":{"text":"…","reply":"…"}}')
         lines, _ = llm.complete_json(
@@ -131,23 +155,38 @@ def next_round(session_id: str) -> dict:
              {"role": "user", "content": prompt}],
             op="speak", session_id=session_id, max_tokens=500, fallback=fb)
 
-    for c in (lines.get("clash") or [])[:2]:
-        mid = c.get("minister")
-        if mid in stances:
-            store.add_turn(session_id, mid, "rebuttal", stances[mid]["stance"],
-                           (c.get("text") or "……").strip(), influence=stances[mid]["influence"])
+    said_by: dict[str, str] = {}
+    clash = lines.get("clash")
+    texts = [_as_dict(x).get("text") for x in (clash if isinstance(clash, list) else [])]
+
+    # 台词按顺序发给「我」选定的这两位，不看模型填的 minister —— 模型经常自己换人上场，
+    # 那样代码算出来的对呛（以及为蝴蝶预取的文库材料）就全落空了。规则归代码，台词归模型。
+    for i, mid in enumerate(duel or ()):
+        said = (texts[i] if i < len(texts) and isinstance(texts[i], str) and texts[i].strip()
+                else roster.ROSTER[mid][key]).strip()
+        store.add_turn(session_id, mid, "rebuttal", stances[mid]["stance"],
+                       said, influence=stances[mid]["influence"])
+        said_by[mid] = said
 
     if lob:
         src, dst = lob
-        lo = lines.get("lobby") or {}
-        store.add_turn(session_id, src, "lobby", stances[src]["stance"],
-                       (lo.get("text") or roster.ROSTER[src][key]).strip(),
+        lo = _as_dict(lines.get("lobby"))
+        said = (lo.get("text") or roster.ROSTER[src][key]).strip()
+        said_by[src] = said_by.get(src, "") + " " + said
+        store.add_turn(session_id, src, "lobby", stances[src]["stance"], said,
                        influence=stances[src]["influence"], target=dst)
         if flipped or forced:
             final = new_stance if flipped else ("pro" if s["lean"] >= 0 else "con")
             store.add_turn(session_id, dst, "lobby", final,
                            (lo.get("reply") or roster.ROSTER[dst][key]).strip(),
                            influence=stances[dst]["influence"] * (1.1 if flipped else 0.9), target=src)
+
+    # 检索到几条 vs 蝴蝶真正引用了几条，差值就是「确认偏误」的可量化形式
+    if hits and said_by.get("moth"):
+        library.mark_cited(session_id, hits, said_by["moth"])
+    # 浣熊是档案官：它翻出来的旧账就是文库的新素材，下一轮蝴蝶就能检索到
+    if said_by.get("raccoon"):
+        library.add_facts([said_by["raccoon"].strip()], session_id=session_id, source="raccoon")
 
     return snapshot(session_id)
 
@@ -187,8 +226,9 @@ def verdict(session_id: str, choice: str) -> dict:
                                      f"朝堂票型：赞成 {tally['pro']}、反对 {tally['con']}、未定 {tally['undecided']}\n"
                                      '返回 JSON：{"edict":"判词"}'}],
         op="verdict", session_id=session_id, max_tokens=200, fallback=fb)
+    edict = data.get("edict")
     store.add_turn(session_id, "emperor", "verdict", "undecided",
-                   (data.get("edict") or fb["edict"]).strip())
+                   (edict if isinstance(edict, str) and edict.strip() else fb["edict"]).strip())
     store.end_session(session_id, choice)
     return snapshot(session_id)
 

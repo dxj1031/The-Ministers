@@ -107,9 +107,21 @@
 - **答案不必绝对正确**：产品目标是帮助用户看清倾向、权衡冲突、做出一个更有参与感的决定。
 - **轻量但可持续**：当前以单页原型和本地存储支撑完整闭环，后续可逐步接入后端、账号和分享体系。
 
+## 蝴蝶文库：把确认偏误做成一条可度量的 RAG 链路
+
+奏章背景切句入库，浣熊每翻出一笔旧账就往里加一条。蝴蝶上场前先做余弦 top-3 检索，
+检索到的材料塞进它的 prompt —— 但它的人设是「先有结论再找资料」，所以只会引用支持自己立场的那几条。
+
+**检索到 N 条、真正引用 M 条，`N - M` 就是确认偏误的数字形式**，每次检索都记在 `retrieval` 表里。
+第一次真跑就跑出了教科书式的结果：蝴蝶持赞成立场，检索到的 3 条全是反面材料
+（房东涨租、猫毛过敏、回本要两年），于是一条都没引用，改口说了句「既往有例，创新当兴」。
+
+向量来源可插拔：有 embedding API 就用真 embedding，没有就退回本地哈希向量
+（字符 n-gram → 512 维，思路同 `HashingVectorizer`）。检索数学一样，用的哪一种如实记进
+`retrieval.vectorizer`，监控台上看得见 —— 不会拿哈希向量冒充 embedding。
+
 ## 还没做
 
-- **蝴蝶文库接 RAG**：浣熊存事实 → embedding → 向量检索 → 蝴蝶只挑支持自己结论的片段，用检索命中率把「确认偏误」做成可量化的玩法。
 - **评估回归集**：固定议题集 + 打分（人设不串台、立场分布、JSON 合法率、不出旁白），每次改 prompt 前后对比，结果进监控台。
 
 ## 后续方向
@@ -143,6 +155,7 @@ python -m uvicorn app.back.main:app --reload --port 8010
 | API | [app/back/main.py](app/back/main.py) | REST + SSE 直播 + 静态托管 |
 | 辩论引擎 | [app/back/services/court.py](app/back/services/court.py) | 立场、对呛、游说、倒戈、裁决 |
 | 人格 | [app/back/ministers/roster.py](app/back/ministers/roster.py) | 十一位大臣的偏见与口癖 |
+| 蝴蝶文库 | [app/back/services/library.py](app/back/services/library.py) | 向量检索：切句 → 向量化 → 余弦 top-k → 进 prompt |
 | 模型 | [app/back/core/llm.py](app/back/core/llm.py) | OpenAI 兼容调用，每次调用落一行轨迹 |
 | 数据 | [app/back/core/store.py](app/back/core/store.py) · [schema.sql](app/back/core/schema.sql) | SQLite，可移植 SQL |
 | 监控台 | [app/back/console/index.html](app/back/console/index.html) | 调用量、tokens、成本、延迟 p95、失败率、兜底率、每局时间线 |
