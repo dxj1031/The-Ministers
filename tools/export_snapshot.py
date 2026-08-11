@@ -25,6 +25,7 @@ def main():
     for s in sessions:
         d = store.get_session(s["id"])
         d["traces"] = store.list_traces(s["id"], MAX_TRACES)
+        d["retrievals"] = store.list_retrievals(s["id"])
         detail[s["id"]] = d
 
     snap = {
