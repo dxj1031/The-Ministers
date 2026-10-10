@@ -115,6 +115,11 @@ def test_aggregate_and_delta():
     assert "好" in runner.delta("narration_rate", 0.1, 0.2)
     assert "好" in runner.delta("len_ok", 0.9, 0.8)
     assert "差" in runner.delta("len_ok", 0.8, 0.9)
+    # 延迟降低是变好 —— 第一版漏了这条，CLI 把「快了 203ms」标成了「差」
+    assert "好" in runner.delta("avg_latency_ms", 3387, 3591)
+    assert "差" in runner.delta("avg_latency_ms", 3591, 3387)
+    assert "ms" in runner.delta("avg_latency_ms", 3387, 3591), "延迟差值要带单位"
+    assert "pp" in runner.delta("len_ok", 0.9, 0.8), "比例差值用百分点"
     assert runner.delta("len_ok", 0.8, 0.8).strip() == "="
     assert runner.delta("len_ok", None, 0.8) == ""
 

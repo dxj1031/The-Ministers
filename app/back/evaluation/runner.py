@@ -23,7 +23,7 @@ from app.back.evaluation import scorers                  # noqa: E402
 from app.back.services import court                      # noqa: E402
 
 # 越低越好的指标，报表里要反着标颜色
-LOWER_BETTER = {"fallback_rate", "narration_rate", "dup_rate"}
+LOWER_BETTER = {"fallback_rate", "narration_rate", "dup_rate", "avg_latency_ms"}
 RATIOS = ["json_ok", "fallback_rate", "len_ok", "narration_rate", "dup_rate",
           "stance_spread_ok", "deadlock_ok", "round_shape_ok"]
 
@@ -98,7 +98,12 @@ def delta(k: str, now, prev) -> str:
         return "  ="
     better = (d < 0) if k in LOWER_BETTER else (d > 0)
     arrow = "↑" if d > 0 else "↓"
-    unit = f"{abs(d) * 100:.1f}pp" if k in RATIOS else f"{abs(d):.2f}"
+    if k in RATIOS:
+        unit = f"{abs(d) * 100:.1f}pp"
+    elif k == "avg_latency_ms":
+        unit = f"{abs(d):.0f}ms"
+    else:
+        unit = f"{abs(d):.2f}"
     return f"  {arrow}{unit} {'好' if better else '差'}"
 
 
