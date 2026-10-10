@@ -85,3 +85,29 @@ CREATE TABLE IF NOT EXISTS retrieval (
 );
 
 CREATE INDEX IF NOT EXISTS idx_retrieval_session ON retrieval (session_id, id);
+
+-- 评估回归：一次 run = 跑一遍固定议题集，打一组分。
+-- 存下来才能回答"改了 prompt 之后变好还是变坏"，而不是靠感觉。
+CREATE TABLE IF NOT EXISTS eval_run (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  label        TEXT NOT NULL DEFAULT '',
+  model        TEXT NOT NULL DEFAULT '',
+  judge_model  TEXT,                            -- NULL = 这次没跑人设评审
+  cases        INTEGER NOT NULL DEFAULT 0,
+  metrics      TEXT NOT NULL DEFAULT '{}',      -- JSON
+  started_at   TEXT NOT NULL,
+  finished_at  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS eval_case (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id     INTEGER NOT NULL REFERENCES eval_run(id),
+  case_id    TEXT NOT NULL,
+  topic      TEXT NOT NULL,
+  session_id TEXT,
+  metrics    TEXT NOT NULL DEFAULT '{}',        -- JSON
+  failures   TEXT NOT NULL DEFAULT '[]',        -- JSON: [{kind, minister, text}]
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_evalcase_run ON eval_case (run_id);

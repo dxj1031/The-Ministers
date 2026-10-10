@@ -239,6 +239,73 @@ def list_retrievals(session_id: str | None = None, limit: int = 100) -> list[dic
     return rows
 
 
+# ---------- 评估回归 ----------
+
+def start_eval_run(label: str, model: str, judge_model: str | None, cases: int) -> int:
+    with conn() as c:
+        cur = c.execute(
+            """INSERT INTO eval_run (label, model, judge_model, cases, started_at)
+               VALUES (?,?,?,?,?)""",
+            (label, model, judge_model, cases, now()),
+        )
+        return cur.lastrowid
+
+
+def finish_eval_run(run_id: int, metrics: dict) -> None:
+    with conn() as c:
+        c.execute("UPDATE eval_run SET metrics=?, finished_at=? WHERE id=?",
+                  (json.dumps(metrics, ensure_ascii=False), now(), run_id))
+
+
+def add_eval_case(run_id: int, case_id: str, topic: str, session_id: str | None,
+                  metrics: dict, failures: list) -> int:
+    with conn() as c:
+        cur = c.execute(
+            """INSERT INTO eval_case (run_id, case_id, topic, session_id, metrics,
+                                      failures, created_at)
+               VALUES (?,?,?,?,?,?,?)""",
+            (run_id, case_id, topic, session_id,
+             json.dumps(metrics, ensure_ascii=False),
+             json.dumps(failures, ensure_ascii=False), now()),
+        )
+        return cur.lastrowid
+
+
+def _ms_between(a: str | None, b: str | None) -> int:
+    if not a or not b:
+        return 0
+    try:
+        return int((datetime.fromisoformat(b) - datetime.fromisoformat(a)).total_seconds() * 1000)
+    except ValueError:
+        return 0
+
+
+def list_eval_runs(limit: int = 10) -> list[dict]:
+    """最新的在前。metrics 解成 dict，duration_ms 顺手算好，省得前端自己算时间差。"""
+    with conn() as c:
+        rows = _rows(c.execute(
+            "SELECT * FROM eval_run ORDER BY id DESC LIMIT ?", (limit,)))
+    for r in rows:
+        r["metrics"] = json.loads(r["metrics"] or "{}")
+        r["duration_ms"] = _ms_between(r["started_at"], r["finished_at"])
+    return rows
+
+
+def get_eval_run(run_id: int) -> dict | None:
+    runs = [r for r in list_eval_runs(1000) if r["id"] == run_id]
+    if not runs:
+        return None
+    run = runs[0]
+    with conn() as c:
+        cs = _rows(c.execute(
+            "SELECT * FROM eval_case WHERE run_id=? ORDER BY id", (run_id,)))
+    for x in cs:
+        x["metrics"] = json.loads(x["metrics"] or "{}")
+        x["failures"] = json.loads(x["failures"] or "[]")
+    run["cases"] = cs
+    return run
+
+
 def stats() -> dict:
     """监控台顶部指标。"""
     with conn() as c:

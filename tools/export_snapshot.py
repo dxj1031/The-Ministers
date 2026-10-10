@@ -17,6 +17,7 @@ from app.back.core import store  # noqa: E402
 OUT = ROOT / "snapshot.json"
 MAX_SESSIONS = 8          # 展示够用就行，别把整个库塞进仓库
 MAX_TRACES = 40
+MAX_EVAL_RUNS = 6
 
 
 def main():
@@ -28,16 +29,21 @@ def main():
         d["retrievals"] = store.list_retrievals(s["id"])
         detail[s["id"]] = d
 
+    # 评估 run 连同它的 case 明细一起内嵌，静态页不能再发第二个请求
+    evals = [store.get_eval_run(r["id"]) for r in store.list_eval_runs(MAX_EVAL_RUNS)]
+
     snap = {
         "exported_at": store.now(),
         "health": {"ok": True, "db": "snapshot"},
         "stats": store.stats(),
         "sessions": sessions,
+        "evals": evals,
         "detail": detail,
     }
     OUT.write_text(json.dumps(snap, ensure_ascii=False, indent=1), encoding="utf-8")
     kb = OUT.stat().st_size / 1024
-    print(f"{OUT.name}: {len(sessions)} 场朝会 · {snap['stats']['calls']} 次调用 · {kb:.0f} KB")
+    print(f"{OUT.name}: {len(sessions)} 场朝会 · {snap['stats']['calls']} 次调用 · "
+          f"{len(evals)} 次评估 · {kb:.0f} KB")
     if kb > 800:
         print("提示：快照偏大，调小 MAX_SESSIONS / MAX_TRACES")
 

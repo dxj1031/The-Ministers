@@ -156,6 +156,19 @@ def court_verdict(session_id: str, req: VerdictReq):
     return _court(court.verdict, session_id, req.choice)
 
 
+@app.get("/api/evals")
+def evals(limit: int = 10):
+    return store.list_eval_runs(limit)
+
+
+@app.get("/api/evals/{run_id}")
+def eval_run(run_id: int):
+    r = store.get_eval_run(run_id)
+    if r is None:
+        raise HTTPException(404, "no such eval run")
+    return r
+
+
 @app.get("/")
 def console():
     if not CONSOLE.exists():
