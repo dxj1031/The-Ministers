@@ -122,9 +122,42 @@
 （字符 n-gram → 512 维，思路同 `HashingVectorizer`）。检索数学一样，用的哪一种如实记进
 `retrieval.vectorizer`，监控台上看得见 —— 不会拿哈希向量冒充 embedding。
 
+## 评估回归：改完 prompt 到底是变好还是变坏
+
+七个冻结的议题，两条分开的打分轨道。
+
+**机械指标是纯代码**，同一份朝会记录跑一百遍给同一个分 —— 这才叫回归测试：
+台词长度、旁白率、重复率、开场立场分布、终局死锁、回合结构、JSON 合法率、兜底率。
+
+**人设贴合度判不了正则**（"这句话像不像维斯帕说的"），所以用 LLM 当评审打 0–2 分。
+它有方差，所以单独列、评审用的模型记在 run 上，**没跑评审时这一项是 `null` 而不是 0** ——
+评估指标自己造假，比没有评估更糟。
+
+```bash
+python -m app.back.evaluation.runner --label baseline --judge
+python -m app.back.evaluation.runner --offline --label harness   # 断开模型，只验证打分链路
+```
+
+每次 run 连同每个用例的失败项存进库，和上一次自动对比，并且**知道每个指标哪个方向算好**
+（旁白率升高标红，长度合规率升高标绿）。结果显示在监控台的「评估回归」区。
+
+qwen2.5:14b 上的第一条 baseline：
+
+| 指标 | 值 | 说明 |
+| --- | --- | --- |
+| 旁白率 | 0% | 之前「模型写第三人称叙述而不是台词」的毛病，prompt 修完归零 |
+| 回合形状 | 100% | 对呛双方由引擎指定之后，每轮恰好两句，没有再塌过 |
+| JSON 合法率 | 98.0% | 剩下 2% 由兜底接住，产品没崩 |
+| 立场分布 | 85.7% | 七个用例里有一个开场只有 2 位赞成，低于「各至少 3」的要求 |
+| **人设贴合度** | **1.25 / 2** | 最弱的一项。英文用例只有 0.75 —— 人设描述是中文写的，模型用英文发言时人格明显掉档 |
+
+最后一行就是这套评估的用处：它指出下一步该改哪里，而不是让人凭感觉猜。
+
 ## 还没做
 
-- **评估回归集**：固定议题集 + 打分（人设不串台、立场分布、JSON 合法率、不出旁白），每次改 prompt 前后对比，结果进监控台。
+- **补齐英文人设**：`roster.py` 里的 bias/voice 只有中文，英文用例的人设分明显偏低
+- **开场立场分布约束**：现在靠 prompt 请求「各至少 3」，模型不总是听；可以像对呛双方那样改成引擎指定
+- **把后端部署到线上**：需要托管的 Postgres、模型额度、限流和预算上限
 
 ## 后续方向
 
@@ -161,6 +194,7 @@ python -m uvicorn app.back.main:app --reload --port 8010
 | 模型 | [app/back/core/llm.py](app/back/core/llm.py) | OpenAI 兼容调用，每次调用落一行轨迹 |
 | 数据 | [app/back/core/store.py](app/back/core/store.py) · [schema.sql](app/back/core/schema.sql) | SQLite，可移植 SQL |
 | 监控台 | [app/back/console/index.html](app/back/console/index.html) | 调用量、tokens、成本、延迟 p95、失败率、兜底率、每局时间线 |
+| 评估 | [app/back/evaluation/](app/back/evaluation/) | 固定议题集、打分器、回归 runner |
 | 设计草稿 | [docs/system_design_v0.md](docs/system_design_v0.md) | |
 
 ### 两条硬约束
