@@ -402,8 +402,34 @@ def get_eval_run(run_id: int) -> dict | None:
     return run
 
 
-def stats() -> dict:
-    """监控台顶部指标。"""
+def offline_eval_sessions() -> list[str]:
+    """--offline 那些评估跑用掉的 session。
+
+    判据就是 run 的兜底率 100%：模型断开时每一次调用都会兜底。
+    这些朝会在本地是有用的回归，但它们的失败是故意制造的，
+    混进展示用的总览里就等于说「这系统四次调用挂三次」—— 那不是事实。
+    """
+    with conn() as c:
+        rows = _rows(c.execute(
+            """SELECT c.session_id AS sid FROM eval_case c JOIN eval_run r ON r.id = c.run_id
+                WHERE c.session_id IS NOT NULL
+                  AND json_extract(r.metrics, '$.fallback_rate') = 1.0"""))
+    return [r["sid"] for r in rows]
+
+
+def stats(exclude_sessions: list[str] | None = None) -> dict:
+    """监控台顶部指标。
+
+    exclude_sessions 用来把 --offline 的回归跑排除在展示之外（见 offline_eval_sessions）。
+    默认不排除：本地实时看板就是要看见全部，包括自己制造的失败。
+    """
+    skip = list(exclude_sessions or [])
+    # 参数化 IN：session_id 是 uuid，没有注入面，但照样别拼字符串
+    where = ""
+    args: tuple = ()
+    if skip:
+        where = " WHERE session_id IS NULL OR session_id NOT IN (%s)" % ",".join("?" * len(skip))
+        args = tuple(skip)
     with conn() as c:
         total = dict(c.execute(
             """SELECT COUNT(*)                              AS calls,
@@ -413,16 +439,20 @@ def stats() -> dict:
                       COALESCE(AVG(latency_ms), 0)          AS avg_latency_ms,
                       COALESCE(SUM(1 - ok), 0)              AS errors,
                       COALESCE(SUM(fallback), 0)            AS fallbacks
-               FROM llm_trace"""
+               FROM llm_trace""" + where, args
         ).fetchone())
-        total["sessions"] = c.execute("SELECT COUNT(*) FROM court_session").fetchone()[0]
+        total["sessions"] = c.execute(
+            "SELECT COUNT(*) FROM court_session" + (
+                " WHERE id NOT IN (%s)" % ",".join("?" * len(skip)) if skip else ""), args
+        ).fetchone()[0]
         total["by_op"] = _rows(c.execute(
             """SELECT op, COUNT(*) AS calls, COALESCE(AVG(latency_ms),0) AS avg_latency_ms,
                       COALESCE(SUM(cost_usd),0) AS cost_usd, COALESCE(SUM(1-ok),0) AS errors
-               FROM llm_trace GROUP BY op ORDER BY calls DESC"""
+               FROM llm_trace""" + where + " GROUP BY op ORDER BY calls DESC", args
         ))
         # p95 延迟：小表直接排序取分位，够用。
-        lat = [r[0] for r in c.execute("SELECT latency_ms FROM llm_trace ORDER BY latency_ms").fetchall()]
+        lat = [r[0] for r in c.execute(
+            "SELECT latency_ms FROM llm_trace" + where + " ORDER BY latency_ms", args).fetchall()]
         total["p95_latency_ms"] = lat[min(len(lat) - 1, int(len(lat) * 0.95))] if lat else 0
         total["rag"] = dict(c.execute(
             """SELECT COUNT(*)                                    AS searches,
