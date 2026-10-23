@@ -100,8 +100,8 @@ def read_user(session_id: str) -> dict:
     fb = {f: cur.get(f, {}).get("text", "") for f in store.READ_FIELDS}
 
     prompt = (f"{_user_material(session_id)}\n\n"
-              + (f"档案里已经记着：{json.dumps(fb, ensure_ascii=False)}\n"
-                 "有新证据就改，没有就照抄。\n" if any(fb.values()) else "")
+              + (f"档案里记着（来自此前的奏章，未必还适用于这次的议题）：{json.dumps(fb, ensure_ascii=False)}\n"
+                 "逐项核对：放到这次的议题上仍然说得通的才留下，说不通的重新看，拿不准的留空。\n" if any(fb.values()) else "")
               + (f"这几项是皇帝亲口定的：{json.dumps(pinned, ensure_ascii=False)}\n"
                  if pinned else "")
               + '返回 JSON：{"anxiety":"…","impulse":"…","stake":"…","deadline":"…"}，'
@@ -109,13 +109,24 @@ def read_user(session_id: str) -> dict:
     data, _ = llm.complete_json(
         [{"role": "system", "content": READ_SYS},
          {"role": "user", "content": prompt}],
+        # 兜底不是旧档案：模型挂了就什么也别写。把上一局的读数当这一局的新结论重述一遍，
+        # 比留空更糟 —— 那会让翻修率看起来很稳，稳的却是一份过期档案。
         op="read_user", minister="raccoon", session_id=session_id,
-        max_tokens=300, fallback=fb)
+        max_tokens=300, fallback={f: "" for f in store.READ_FIELDS})
 
     out = {f: str(_as_dict(data).get(f) or "").strip()[:40] for f in store.READ_FIELDS}
     out.update(pinned)          # 规则在代码里：用户钉死的字段，模型改不动
-    if any(out.values()) and out != fb:
-        store.add_user_read(session_id, "raccoon", out)
+
+    # 落库的那一行里，用户定过的字段留空：拾荒不替用户签名。
+    # user_read() 是按字段取最新一条非空的，所以这些字段仍然指向用户那一行，
+    # source 还是 user —— 值保住了不够，作者也得保住。
+    stored = {f: ("" if f in pinned else out[f]) for f in store.READ_FIELDS}
+    # 和上次一模一样也要追加一行。这里曾经加过 `and out != fb` 去重，结果是：
+    # 档案官稳住不动时一行都不写，翻修率只数得到它改主意的那几次 ——
+    # 一个只能报告不稳、报告不了稳的指标，比没有指标更糟。
+    # 它自己那几项全空才不写：那是「这次什么也没看出来」，不是一次整理。
+    if any(stored.values()):
+        store.add_user_read(session_id, "raccoon", stored)
     return out
 
 
