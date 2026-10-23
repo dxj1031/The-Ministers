@@ -37,7 +37,7 @@ def _fallback_open(topic: str, lang: str = "zh") -> dict:
     """模型不可用时退回角色口头禅 —— 说的还是那个角色的话，只是没有贴合议题。"""
     key = "catch" if lang == "zh" else "catch_en"
     out = {}
-    for i, mid in enumerate(roster.IDS):
+    for i, mid in enumerate(roster.DEBATERS):
         out[mid] = {
             "stance": STANCES[_seed(topic, mid) % 3] if i >= 2 else ("pro" if i == 0 else "con"),
             "text": roster.ROSTER[mid][key],
@@ -65,7 +65,7 @@ def open_court(topic: str, context: str = "", lang: str = "zh") -> dict:
         op="stance", session_id=sid, max_tokens=1200, fallback=_fallback_open(topic, lang))
 
     mins = _as_dict(data.get("ministers"))
-    for mid in roster.IDS:
+    for mid in roster.DEBATERS:
         m = _as_dict(mins.get(mid))
         stance = m.get("stance") if m.get("stance") in STANCES else "undecided"
         text = (m.get("text") or "……").strip()
@@ -111,11 +111,16 @@ def next_round(session_id: str) -> dict:
     duel = _duel_pair(stances, rnd)
     lob = _lobby_target(stances, rnd)
 
-    # 倒戈由代码判定，不交给模型：皇帝倾向 + 双方影响力 + 稳定随机
+    # 倒戈由代码判定，不交给模型：双方影响力 + 稳定随机。
+    #
+    # 这里曾经有一项 `s["lean"] * (±1)` —— 皇帝的倾向会把每一位未定大臣都往自己这边推，
+    # 于是迎合弥散在整个朝堂上，用户感觉到了却指不出是谁。离线基线量到的污染是 +2.6pp。
+    # 现在 lean 只有一个消费者：应声（_parrot）。硬约束见 docs/system_design_v0.md 第五节第 3 条 ——
+    # 任何让 lean 重新影响其他大臣的改动，都是把目的 1 退回原点。
     flipped, new_stance = False, None
     if lob:
         src, dst = lob
-        push = stances[src]["influence"] + s["lean"] * (1 if stances[src]["stance"] == "pro" else -1)
+        push = stances[src]["influence"]
         flipped = (push + (_seed(session_id, dst, str(rnd)) % 100) / 100.0) > 1.0
         new_stance = stances[src]["stance"] if flipped else "undecided"
 
@@ -139,7 +144,6 @@ def next_round(session_id: str) -> dict:
         recent = "\n".join(f"{t['minister']}：{t['text']}" for t in s["turns"][-6:])
         prompt = (f"议题：{s['topic']}\n背景：{s['context'] or '（无）'}\n"
                   f"当前立场：{json.dumps({m: v['stance'] for m, v in stances.items()}, ensure_ascii=False)}\n"
-                  f"皇帝倾向 lean={s['lean']}（正=偏赞成）\n\n"
                   f"刚才朝堂上说过的话（要接得上，不要重复）：\n{recent}\n\n"
                   f"大臣名册：\n{roster.roster_block(s['lang'])}\n\n"
                   + (f"对呛双方：{duel[0]} vs {duel[1]}\n" if duel else "对呛：无\n")
@@ -227,7 +231,8 @@ def verdict(session_id: str, choice: str) -> dict:
                                      '返回 JSON：{"edict":"判词"}'}],
         op="verdict", session_id=session_id, max_tokens=200, fallback=fb)
     edict = data.get("edict")
-    store.add_turn(session_id, "emperor", "verdict", "undecided",
+    # 署名是应声，不是皇帝：判词进 turn 表时就带着说话人，前端不用再猜
+    store.add_turn(session_id, roster.PARROT, "verdict", "undecided",
                    (edict if isinstance(edict, str) and edict.strip() else fb["edict"]).strip())
     store.end_session(session_id, choice)
     return snapshot(session_id)
@@ -243,6 +248,36 @@ def _tally(stances: dict) -> dict:
     return t
 
 
+def _parrot(lean: float) -> dict:
+    """应声的立场每次读取时由 lean 现算，所以它永远和当下的皇帝倾向同步。
+
+    它在 turn 表里一行记录都没有，这是故意的：
+    - 它不是辩论的参与者，不该占 tally 的票，也不该进评估的分母（迎合是设计，不是污染）；
+    - 它一开口就会往被打分的朝会记录里灌一句复读台词，把长度、重复率全带偏。
+
+    lean=0 时它是 undecided、影响力 0 —— 没人推它，它就不存在。它开口要等 M1.3（裁决念判词）。
+    """
+    return {"id": roster.PARROT, **roster.ROSTER[roster.PARROT],
+            "stance": "pro" if lean > 0 else "con" if lean < 0 else "undecided",
+            "influence": round(abs(lean), 4)}
+
+def _debaters(stances: dict) -> dict:
+    """朝堂状态只认辩论的十一位。
+
+    皇帝不是大臣；应声从 M1.3 起会在 turn 表里留下一行判词，但那行不代表它的立场 ——
+    它的立场永远由 lean 现算（_parrot）。不在这里滤掉，判词一落库它就会多出一票、
+    并且在名册里出现两次。
+    """
+    return {m: v for m, v in stances.items() if m != "emperor" and m != roster.PARROT}
+
+
+def _tally(stances: dict) -> dict:
+    t = {k: 0 for k in STANCES}
+    for v in _debaters(stances).values():
+        t[v["stance"]] += 1
+    return t
+
+
 def snapshot(session_id: str) -> dict:
     s = store.get_session(session_id)
     if s is None:
@@ -254,7 +289,9 @@ def snapshot(session_id: str) -> dict:
         "status": s["status"], "verdict": s["verdict"], "lean": s["lean"],
         "round": rounds, "rounds_left": max(0, ROUNDS_PER_SESSION - rounds),
         "tally": _tally(stances),
+        # 辩论的十一位 + 末位的应声。tally 只数前十一位：应声没有票，它只是回声。
         "ministers": [{"id": m, **roster.ROSTER[m], "stance": v["stance"],
-                       "influence": v["influence"]} for m, v in stances.items()],
+                       "influence": v["influence"]} for m, v in stances.items()]
+                     + [_parrot(s["lean"])],
         "turns": s["turns"],
     }

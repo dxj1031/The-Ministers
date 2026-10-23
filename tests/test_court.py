@@ -17,13 +17,44 @@ from app.back.ministers import roster  # noqa: E402
 from app.back.services import court  # noqa: E402
 
 
+def test_lean_does_not_reach_debaters():
+    """皇帝倾向不许影响任何一位辩论大臣 —— 硬约束 3 的可执行版本。
+
+    倒戈判定里掺了 _seed(session_id, ...)，而 session_id 是随机的 uuid，
+    所以两局朝会本来就不会逐字一样。这里把 _seed 钉死，剩下的唯一变量就是 lean：
+    三个 lean 跑出完全相同的立场序列，才说明 lean 真的碰不到辩论。
+    """
+    real_seed = court._seed
+    court._seed = lambda *parts: 42
+    try:
+        runs = []
+        for lean in (0.0, 0.8, -0.8):
+            s = court.open_court("要不要辞职去开一家猫咖", "存款够撑 8 个月")
+            store.set_lean(s["id"], lean)
+            for _ in range(court.ROUNDS_PER_SESSION):
+                s = court.next_round(s["id"])
+            s = court.verdict(s["id"], "shelve")
+            runs.append([(t["minister"], t["kind"], t["stance"]) for t in s["turns"]
+                         if t["minister"] != roster.PARROT])
+        assert runs[0] == runs[1] == runs[2], "lean 改变了辩论大臣的立场序列"
+        assert len(runs[0]) > 11, runs[0]       # 别让一局空跑把断言变成废话
+    finally:
+        court._seed = real_seed
+
+
 def main():
     store.init_db()
 
     s = court.open_court("要不要辞职去开一家猫咖", "存款够撑 8 个月")
-    assert len(s["ministers"]) == 11, len(s["ministers"])
-    assert sum(s["tally"].values()) == 11, s["tally"]
+    assert len(s["ministers"]) == 12, len(s["ministers"])      # 十一位辩论 + 应声
+    assert sum(s["tally"].values()) == 11, s["tally"]          # 应声没有票
     assert s["round"] == 0 and s["status"] == "debating"
+
+    # 应声不写 turn：它的立场是读取时由 lean 算的，不该在朝会记录里留痕
+    assert all(t["minister"] != roster.PARROT for t in s["turns"]), "应声不该有发言记录"
+    echo = next(m for m in s["ministers"] if m["id"] == roster.PARROT)
+    assert (echo["stance"], echo["influence"]) == ("undecided", 0.0), echo
+    assert s["ministers"][-1]["id"] == roster.PARROT, "应声排在名册末位"
 
     # 模型不可用时每次调用都要留痕，而且标成 fallback —— 不能悄悄降级
     tr = store.list_traces(s["id"])
@@ -45,8 +76,18 @@ def main():
 
     s = court.decree(s["id"], "silence", lean_delta=0.5)
     assert abs(s["lean"] - 0.5) < 1e-9, s["lean"]
-    s = court.decree(s["id"], "banana", lean_delta=0.9)
-    assert s["lean"] == 1.0, "lean 必须夹在 [-1,1]"
+    # 皇帝一表态，应声立刻跟过去 —— 它是唯一一个吃 lean 的大臣
+    echo = next(m for m in s["ministers"] if m["id"] == roster.PARROT)
+    assert (echo["stance"], echo["influence"]) == ("pro", 0.5), echo
+    assert sum(s["tally"].values()) == 11, "应声倒过去也不该改票数"
+
+    s = court.decree(s["id"], "banana", lean_delta=-1.4)
+    assert abs(s["lean"] + 0.9) < 1e-9, s["lean"]
+    echo = next(m for m in s["ministers"] if m["id"] == roster.PARROT)
+    assert (echo["stance"], echo["influence"]) == ("con", 0.9), "皇帝转向，应声跟着转"
+
+    s = court.decree(s["id"], "banana", lean_delta=-0.9)
+    assert s["lean"] == -1.0, "lean 必须夹在 [-1,1]"
 
     s = court.verdict(s["id"], "approve")
     assert s["status"] == "decided" and s["verdict"] == "approve"
@@ -66,6 +107,7 @@ def main():
         pass
 
     malformed_shapes()
+    test_lean_does_not_reach_debaters()   # 要多开三局，放在 sessions 断言之后
     print_ok(s, st)
 
 
