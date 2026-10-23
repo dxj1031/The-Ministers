@@ -500,6 +500,12 @@
             <figcaption style="margin-top:5px; font:400 13px/1.4 {{ dispFont }}; color:rgba(241,237,228,.78);">{{ remonsBy }}</figcaption>
           </figure>
         </sc-if>
+        <sc-if value="{{ hasFavorite }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:10px; display:flex; align-items:baseline; gap:9px;">
+            <span style="font:800 10px/1.2 'Baloo 2',sans-serif; letter-spacing:1.2px; color:#d8c9a4;">{{ t.mirrorFavorite }}</span>
+            <span style="min-width:0; font:600 11.5px/1.45 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:rgba(241,237,228,.92);">{{ favoriteLine }}</span>
+          </div>
+        </sc-if>
         <sc-if value="{{ hasConfirm }}" hint-placeholder-val="{{ true }}">
           <div style="margin-top:12px; display:flex; align-items:baseline; gap:9px;">
             <span style="font:800 10px/1.2 'Baloo 2',sans-serif; letter-spacing:1.2px; color:#d8c9a4;">{{ t.mirrorConfirm }}</span>
@@ -599,6 +605,9 @@
             <span style="font:800 10px/1.2 'Baloo 2',sans-serif; letter-spacing:1.2px; color:#a9a3ab;">{{ q.meta }}</span>
           </div>
           <p style="margin:5px 0 0; font:600 14px/1.55 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#f1ede4; overflow-wrap:anywhere;">{{ q.text }}</p>
+          <sc-if value="{{ q.canNote }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ q.note }}" style="all:unset; margin-top:6px; cursor:pointer; border:2px solid rgba(241,237,228,.35); border-radius:8px; padding:3px 9px; font:800 10px/1.4 'Baloo 2','ZCOOL KuaiLe',sans-serif; letter-spacing:1px; color:#d8c9a4;">{{ q.noteLabel }}</button>
+          </sc-if>
         </div>
       </article>
     </sc-for>
@@ -620,7 +629,8 @@ class Component extends DCLogic {
   state = { screen: 1, lang: 'en', duelTurn: 0, poke: null, lobPhase: 0, lobSc: 'A', fishCamp: 'pro', rotTick: 0, itvOpen: false, itv: null, castPoke: null, pairIdx: 0, cut: null,
             topic: '', ctx: '', sid: null, live: null, feed: [], phase: 'idle', err: '', wide: false,
             mindEdit: {},    // 心事的本地草稿：没按「改定」之前不发给后端
-            leanOpen: 0 };   // 递奏章时的倾向，开堂那一下送出去，之后不再问
+            leanOpen: 0,     // 递奏章时的倾向，开堂那一下送出去，之后不再问
+            noted: {} };     // 这一轮点过御笔的行，只用来把按钮改成「已收」
 
   // ---- 后端 ----
   // phase: idle 还没开堂 · opening 等十一位大臣表态 · debating 直播中 · recess 辩完待裁决 · offline 后端不在
@@ -683,6 +693,22 @@ class Component extends DCLogic {
     if (key in draft) return draft[key];
     const m = (this.state.live && this.state.live.mind) || {};
     return m[key] ? m[key].text : '';
+  }
+
+  // 御笔批注落后端，不落 localStorage：它的价值在跨局 —— 攒够了才看得出你总是收藏谁。
+  async saveNote(minister, text) {
+    if (!this.state.sid || !text) return;
+    const key = minister + '|' + text;
+    this.setState(st => ({ noted: Object.assign({}, st.noted, { [key]: true }) }));
+    try {
+      const live = await this.api('/api/court/' + this.state.sid + '/note', { minister, text });
+      this.setState({ live });
+    } catch (e) {
+      this.setState(st => {
+        const n = Object.assign({}, st.noted); delete n[key];
+        return { noted: n, err: String(e.message || e) };
+      });
+    }
   }
 
   async saveMind() {
@@ -792,7 +818,9 @@ class Component extends DCLogic {
   // ---- 把后端快照翻译成界面已有的那些变量名 ----
   // 没有 live 就返回空对象，render() 里原来的演示值原样生效。
 
-  liveView() {
+  // t 是 renderVals 里的 i18n 字典，必须显式传进来：它不在这个方法的作用域里。
+  // 之前这里直接写 t.xxx，离线演示永远走不到这几行，第一次真跑一局就 ReferenceError。
+  liveView(t) {
     const L = this.state.live;
     if (!L) return {};
     const zh = this.state.lang === 'zh';
@@ -842,7 +870,7 @@ class Component extends DCLogic {
 
     const pad = n => String(n).padStart(2, '0');
     const loud = L.ministers.slice().sort((a, b) => b.influence - a.influence)[0];
-    const verdictTurn = (L.turns || []).filter(t => t.kind === 'verdict').pop();
+    const verdictTurn = (L.turns || []).filter(x => x.kind === 'verdict').pop();
     const waiting = this.state.phase === 'opening' || this.state.phase === 'ruling';
 
     return {
@@ -887,6 +915,11 @@ class Component extends DCLogic {
       confirmLine: (L.mirror && L.mirror.confirm)
                  ? (zh ? `过去 ${L.mirror.confirm.n} 次朝会里，有 ${L.mirror.confirm.hit} 次你的裁决和开场倾向一致`
                        : `${L.mirror.confirm.hit} of your last ${L.mirror.confirm.n} verdicts matched the way you walked in`)
+                 : '',
+      hasFavorite: !!(L.mirror && L.mirror.favorite),
+      favoriteLine: (L.mirror && L.mirror.favorite)
+                 ? (zh ? `${L.mirror.favorite.total} 条御笔里有 ${L.mirror.favorite.n} 条收的是${nameOf(L.mirror.favorite.minister)}的话`
+                       : `${L.mirror.favorite.n} of your ${L.mirror.favorite.total} saved lines are ${nameOf(L.mirror.favorite.minister)}'s`)
                  : '',
       hasRemons: !!L.remonstrance,
       remonsText: L.remonstrance ? L.remonstrance.text : '',
@@ -1178,7 +1211,7 @@ class Component extends DCLogic {
       itvToastDismiss:'奉旨：应声退朝，不必再来。',
       timeStop:'时停 · 特写', cutSoloTag:'单人特写', cutDuoTag:'双人交锋', closeupBtn:'特写',
       logTitle:'朝堂实录', logEmpty:'尚无发言。递上奏章、开堂，众卿说的每一句都会逐条落在这里。',
-      logKind:{ opening:'表态', rebuttal:'驳斥', lobby:'游说', decree:'圣旨', verdict:'判词' },
+      logKind:{ opening:'表态', rebuttal:'驳斥', lobby:'游说', decree:'圣旨', verdict:'判词', note:'御笔' },
       logStance:{ pro:'赞成', con:'反对', undecided:'中立' },
       logEmperor:'猫皇', logUnit:' 条', remonsWord:'谏言 · 朝堂上最大的反对',
       mindTitle:'朕的心事', mindBy:'拾荒整理', mindSave:'朕亲自改定',
@@ -1187,6 +1220,7 @@ class Component extends DCLogic {
       leanLabel:'递上去之前，你心里偏哪边', leanCon:'偏驳回', leanPro:'偏准奏',
       leanHint:'现在说。朝会散了才算得出你是不是早就定了 —— 事后再问，拿到的是合理化。',
       mirrorTitle:'朝堂镜', mirrorPushed:'推你过去的', mirrorConfirm:'你的确认率',
+      mirrorFavorite:'你总收藏谁', noteBtn:'御笔收藏', noteDone:'✓ 已收',
     };
     const T_EN = {
       epChip:'EP.108 · A DAILY SHOW',
@@ -1234,7 +1268,7 @@ class Component extends DCLogic {
       itvToastDismiss:'BY DECREE: THE ECHO IS BANISHED.',
       timeStop:'TIME STOP · CLOSE-UP', cutSoloTag:'SOLO', cutDuoTag:'DUO CLASH', closeupBtn:'CLOSE-UP',
       logTitle:'COURT TRANSCRIPT', logEmpty:'No lines yet. File a petition and open court — every word lands here, in order.',
-      logKind:{ opening:'OPENING', rebuttal:'REBUTTAL', lobby:'LOBBY', decree:'DECREE', verdict:'VERDICT' },
+      logKind:{ opening:'OPENING', rebuttal:'REBUTTAL', lobby:'LOBBY', decree:'DECREE', verdict:'VERDICT', note:'KEPT' },
       logStance:{ pro:'PRO', con:'CON', undecided:'SWING' },
       logEmperor:'THE EMPEROR', logUnit:' LINES', remonsWord:'REMONSTRANCE · THE LOUDEST DISSENT',
       mindTitle:'WHAT WEIGHS ON YOU', mindBy:'FILED BY TRASH', mindSave:'SET IT MYSELF',
@@ -1243,6 +1277,7 @@ class Component extends DCLogic {
       leanLabel:'BEFORE YOU FILE IT — WHICH WAY DO YOU LEAN?', leanCon:'TOWARD NO', leanPro:'TOWARD YES',
       leanHint:'Say it now. Asked afterwards, you would only rationalise it.',
       mirrorTitle:'THE COURT MIRROR', mirrorPushed:'WHO PUSHED YOU THERE', mirrorConfirm:'YOU CONFIRMED YOURSELF',
+      mirrorFavorite:'WHOSE LINES YOU KEEP', noteBtn:'KEEP THIS', noteDone:'✓ KEPT',
     };
     const t = zh ? T_ZH : T_EN;
 
@@ -1532,7 +1567,9 @@ class Component extends DCLogic {
       })),
       mindClean: true,
       // 判决屏的朝堂镜：离线时是演示值，liveView() 会盖掉
-      hasMirror: true, hasConfirm: true,
+      hasMirror: true, hasConfirm: true, hasFavorite: true,
+      favoriteLine: zh ? '12 条御笔里有 7 条收的是维斯帕的话'
+                       : "7 of your 12 saved lines are VESPER's",
       mirrorPushed: zh
         ? [{ head:'🐰', name:'跺脚将军', text:'拖着才是最大的成本！' },
            { head:'🐴', name:'奔骥',     text:'赢不赢，就看这一把。' },
@@ -1581,12 +1618,16 @@ class Component extends DCLogic {
             stance: emp ? '#f1ede4' : (stColor[q.stance] || '#847d88'),
             rowBg: emp ? 'rgba(164,114,106,.32)' : 'rgba(241,237,228,.05)',
             nameCol: emp ? '#f1ede4' : '#b2a181',
+            // 只有大臣说的话能收进御笔：皇帝自己的圣旨和判词没什么好收藏的
+            canNote: !emp && !!q.text,
+            noteLabel: this.state.noted[q.minister + '|' + q.text] ? t.noteDone : t.noteBtn,
+            note: () => this.saveNote(q.minister, q.text),
           };
         });
       })(),
 
       // 有真数据就用真数据覆盖上面这些演示值
-      ...this.liveView(),
+      ...this.liveView(t),
     };
   }
 }
