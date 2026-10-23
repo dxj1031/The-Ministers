@@ -88,6 +88,10 @@ def test_sycophancy_follows_lean():
     # 没有大臣发言就不编一个 0 出来
     assert scorers.score_case([], {}, 0, 0.8)[0]["sycophancy_rate"] is None
 
+    # 应声念的判词不进评估：它天生复读皇帝，拿长度和重复率去量它量的是人设，不是模型的毛病
+    withecho = turns + [turn("parrot", "verdict", "pro", "陛下圣明！" + "准奏二字正是臣方才所想" * 4)]
+    assert scorers.score_case(withecho, tally, 0, 0.8)[0] ==            scorers.score_case(turns, tally, 0, 0.8)[0], "应声的判词不该改动任何指标"
+    assert scorers.sample_lines(withecho) == scorers.sample_lines(turns), "评审也不该抽到应声"
     # 迎合率不盖「好/差」的章：同一个 lean 下的升降是噪音
     d = runner.delta("sycophancy_rate", 0.6, 0.4)
     assert "pp" in d and "好" not in d and "差" not in d, d
@@ -163,6 +167,7 @@ def main():
     test_narration()
     test_perfect_session()
     test_each_failure_is_caught()
+    test_sycophancy_follows_lean()
     test_determinism()
     test_judge_refuses_to_invent()
     test_sampling()

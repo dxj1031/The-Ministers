@@ -89,9 +89,25 @@ def main():
     s = court.decree(s["id"], "banana", lean_delta=-0.9)
     assert s["lean"] == -1.0, "lean 必须夹在 [-1,1]"
 
+    turns_before = len(s["turns"])
     s = court.verdict(s["id"], "approve")
     assert s["status"] == "decided" and s["verdict"] == "approve"
     assert s["turns"][-1]["kind"] == "verdict"
+    # 判词由应声念：说话人必须写在记录里，前端靠它署名
+    assert s["turns"][-1]["minister"] == roster.PARROT, s["turns"][-1]
+
+    # 谏言：裁决是准奏，所以进谏的必须是终局反对、影响力最高的那位
+    r = s["remonstrance"]
+    cons = {m: v for m, v in store.current_stances(s["id"]).items() if v["stance"] == "con"}
+    assert r and r["stance"] == "con" and r["minister"] in cons, r
+    assert r["influence"] == max(v["influence"] for v in cons.values()), r
+    # 原话必须是它真说过的，而且是它最后一次发言 —— 重新生成就是编造它没说过的话
+    said = [t for t in s["turns"] if t["minister"] == r["minister"]
+            and t["kind"] in ("opening", "rebuttal", "lobby")]
+    assert r["text"] == said[-1]["text"].strip(), (r["text"], said[-1]["text"])
+    # 裁决只新增一行（判词）。谏言是对已有发言的视角，不落 turn 表 ——
+    # 把原话再存一遍，评估那边就会多出一条「重复台词」，而那不是模型的锅。
+    assert len(s["turns"]) == turns_before + 1, (turns_before, len(s["turns"]))
 
     # 每位大臣的每条发言都必须属于名册（emperor 除外），前端按 id 查头像会依赖这点
     ids = set(roster.IDS) | {"emperor"}

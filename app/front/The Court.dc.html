@@ -444,6 +444,14 @@
       <div style="position:relative; animation:riseIn .6s cubic-bezier(.2,.9,.2,1) both;">
         <div style="font:{{ t.verTitleFont }}; letter-spacing:-1px; color:#b2a181; -webkit-text-stroke:4px #2b2733; paint-order:stroke fill; text-shadow:6px 7px 0 #2b2733;">{{ t.verTitle1 }}<span style="color:transparent; -webkit-text-stroke:3px #f1ede4; text-shadow:none;">{{ t.verTitle2 }}</span></div>
         <div style="margin-top:14px; font:400 19px/1.5 {{ dispFont }}; color:#f1ede4;">{{ decreeText }}</div>
+        <div style="margin-top:7px; font:400 13px/1.4 {{ dispFont }}; color:rgba(241,237,228,.78);">{{ decreeBy }}</div>
+        <sc-if value="{{ hasRemons }}" hint-placeholder-val="{{ true }}">
+          <figure style="margin:14px 0 0; padding:11px 13px; border-left:3px solid #b2a181; background:rgba(43,39,51,.28);">
+            <div style="font:400 12px/1.3 {{ dispFont }}; color:#d8c9a4; letter-spacing:.08em;">{{ t.remonsWord }}</div>
+            <blockquote style="margin:5px 0 0; font:400 16px/1.5 {{ dispFont }}; color:#f1ede4;">{{ remonsText }}</blockquote>
+            <figcaption style="margin-top:5px; font:400 13px/1.4 {{ dispFont }}; color:rgba(241,237,228,.78);">{{ remonsBy }}</figcaption>
+          </figure>
+        </sc-if>
         <div style="margin-top:18px; display:flex; align-items:baseline; gap:13px;">
           <span style="font:400 54px/1 'Lilita One',sans-serif; text-shadow:4px 4px 0 #2b2733;">{{ proN }}</span>
           <span style="font:400 15px/1.1 {{ dispFont }};">{{ t.proWord }}</span>
@@ -726,6 +734,18 @@ class Component extends DCLogic {
       proN: String(L.tally.pro), conN: String(L.tally.con), absN: String(L.tally.undecided),
       decreeText: verdictTurn ? verdictTurn.text
                 : (zh ? '朕还未下旨。' : 'No decree yet.'),
+      // 判词是应声念的 —— 署名写出来，用户才知道这份恭维是谁给的
+      decreeBy: verdictTurn && meta[verdictTurn.minister]
+              ? (meta[verdictTurn.minister].head + ' ' + nameOf(verdictTurn.minister)
+                 + (zh ? ' 代宣' : ' READS THE DECREE'))
+              : '',
+      hasRemons: !!L.remonstrance,
+      remonsText: L.remonstrance ? L.remonstrance.text : '',
+      remonsBy: L.remonstrance
+              ? ((meta[L.remonstrance.minister] ? meta[L.remonstrance.minister].head : '')
+                 + ' ' + nameOf(L.remonstrance.minister)
+                 + ' · ' + (t.logStance[L.remonstrance.stance] || L.remonstrance.stance))
+              : '',
       needVerdict: L.status !== 'decided',
       ticketQuote: last ? last.text : L.topic,
       ticketByline: nameOf(last ? last.minister : loud.id) + ' · ' + L.topic,
@@ -1009,7 +1029,7 @@ class Component extends DCLogic {
       logTitle:'朝堂实录', logEmpty:'尚无发言。递上奏章、开堂，众卿说的每一句都会逐条落在这里。',
       logKind:{ opening:'表态', rebuttal:'驳斥', lobby:'游说', decree:'圣旨', verdict:'判词' },
       logStance:{ pro:'赞成', con:'反对', undecided:'中立' },
-      logEmperor:'猫皇', logUnit:' 条',
+      logEmperor:'猫皇', logUnit:' 条', remonsWord:'谏言 · 朝堂上最大的反对',
     };
     const T_EN = {
       epChip:'EP.108 · A DAILY SHOW',
@@ -1057,7 +1077,7 @@ class Component extends DCLogic {
       logTitle:'COURT TRANSCRIPT', logEmpty:'No lines yet. File a petition and open court — every word lands here, in order.',
       logKind:{ opening:'OPENING', rebuttal:'REBUTTAL', lobby:'LOBBY', decree:'DECREE', verdict:'VERDICT' },
       logStance:{ pro:'PRO', con:'CON', undecided:'SWING' },
-      logEmperor:'THE EMPEROR', logUnit:' LINES',
+      logEmperor:'THE EMPEROR', logUnit:' LINES', remonsWord:'REMONSTRANCE · THE LOUDEST DISSENT',
     };
     const t = zh ? T_ZH : T_EN;
 
@@ -1328,6 +1348,8 @@ class Component extends DCLogic {
       // ---- 判决屏（离线时是演示值，liveView() 会盖掉）----
       proN: '6', conN: '3', absN: '2',
       decreeText: t.decree,
+      decreeBy: '🦜 ' + (zh ? '应声 代宣' : 'ECHO READS THE DECREE'),
+      hasRemons: false, remonsText: '', remonsBy: '',
       needVerdict: false,
       rulings: [
         { key:'approve', icon:'✅', label:t.ruleApprove, bg:'#f1ede4', fg:'#2b2733' },

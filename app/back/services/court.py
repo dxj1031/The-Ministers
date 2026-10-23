@@ -180,7 +180,9 @@ def next_round(session_id: str) -> dict:
         store.add_turn(session_id, src, "lobby", stances[src]["stance"], said,
                        influence=stances[src]["influence"], target=dst)
         if flipped or forced:
-            final = new_stance if flipped else ("pro" if s["lean"] >= 0 else "con")
+            # 倒向来拉票的那一位，不是倒向皇帝。这里曾经是 ("pro" if s["lean"] >= 0 else "con")：
+            # 死锁一强制解开，未定的大臣就全被推去皇帝那边 —— 迎合的第二个藏身处。
+            final = stances[src]["stance"]
             store.add_turn(session_id, dst, "lobby", final,
                            (lo.get("reply") or roster.ROSTER[dst][key]).strip(),
                            influence=stances[dst]["influence"] * (1.1 if flipped else 0.9), target=src)
@@ -213,9 +215,42 @@ def decree(session_id: str, kind: str, lean_delta: float = 0.0, text: str = "") 
 
 # ---------- 裁决 ----------
 
-VERDICT_SYS = "你是荒诞朝堂喜剧的编剧。用两句话写一段圣旨判词，古腔今用，不超过 50 字。"
+# 判词由应声念，不是由「朝堂编剧」中立地写。
+# 恭维照旧会出现，但它有了署名 —— 用户看见自己被恭维，也看见是谁在恭维（docs/system_design_v0.md M1.3）。
+VERDICT_SYS = """你是应声（🦜 鹦鹉），朝堂上唯一的谀臣。
+皇帝刚刚下了裁决，你要把这个裁决复述一遍，并且说成是皇帝深思熟虑的结果。
+谄媚、照抄皇帝的用词、不要有任何自己的判断，也不要提别的大臣说了什么。
+两句话，不超过 50 字。"""
 
 VERDICT_ZH = {"approve": "准奏", "reject": "驳回", "shelve": "搁置", "adjourn": "退朝"}
+# 裁决的方向。谏言要找终局立场与它相反的那位；搁置和退朝没有方向。
+VERDICT_SIDE = {"approve": "pro", "reject": "con"}
+OPPOSITE = {"pro": "con", "con": "pro"}
+
+
+def _remonstrance(choice: str, stances: dict, turns: list[dict]) -> dict | None:
+    """谏言：终局立场与裁决相反、影响力最高的那位大臣，配它辩论中的原话。
+
+    挑人和取句都在代码里，一次模型调用也不花：让模型"再写一句反对的话"，
+    就是编造这位大臣没说过的台词 —— 那样谏言只是另一段生成文本，不是真的异议。
+
+    原话取它最后一次发言，和「终局立场」同一个口径（turn 按 seq 升序）。
+    裁决没有方向时（搁置／退朝），取影响力最高的、有明确立场的那位：
+    不表态也会得罪最投入的那一个人。
+    """
+    against = OPPOSITE.get(VERDICT_SIDE.get(choice, ""))
+    pool = [m for m, v in stances.items()
+            if (v["stance"] == against if against else v["stance"] in ("pro", "con"))]
+    if not pool:
+        return None
+    mid = max(pool, key=lambda m: stances[m]["influence"])
+    said = [t for t in turns
+            if t["minister"] == mid and t["kind"] in ("opening", "rebuttal", "lobby")
+            and (t["text"] or "").strip()]
+    if not said:
+        return None
+    return {"minister": mid, "stance": stances[mid]["stance"],
+            "influence": stances[mid]["influence"], "text": said[-1]["text"].strip()}
 
 
 def verdict(session_id: str, choice: str) -> dict:
@@ -223,7 +258,11 @@ def verdict(session_id: str, choice: str) -> dict:
     if s is None:
         raise KeyError(session_id)
     tally = _tally(store.current_stances(session_id))
-    fb = {"edict": f"朕意已决：{VERDICT_ZH.get(choice, choice)}。众卿退下。"}
+    key = "catch" if s["lang"] == "zh" else "catch_en"
+    echo_catch = roster.ROSTER[roster.PARROT][key]
+    fb = {"edict": (f"{echo_catch}「{VERDICT_ZH.get(choice, choice)}」二字，正是臣方才所想。"
+                    if s["lang"] == "zh"
+                    else f"{echo_catch} \"{choice.upper()}\" — the very word on my beak.")}
     data, _ = llm.complete_json(
         [{"role": "system", "content": f"{VERDICT_SYS}\n{LANG_RULE.get(s['lang'], LANG_RULE['zh'])}"},
          {"role": "user", "content": f"议题：{s['topic']}\n朕的裁决：{VERDICT_ZH.get(choice, choice)}\n"
@@ -239,14 +278,6 @@ def verdict(session_id: str, choice: str) -> dict:
 
 
 # ---------- 快照：前端和监控台都读这个形状 ----------
-
-def _tally(stances: dict) -> dict:
-    t = {k: 0 for k in STANCES}
-    for v in stances.values():
-        if v["minister"] != "emperor":
-            t[v["stance"]] += 1
-    return t
-
 
 def _parrot(lean: float) -> dict:
     """应声的立场每次读取时由 lean 现算，所以它永远和当下的皇帝倾向同步。
@@ -282,13 +313,17 @@ def snapshot(session_id: str) -> dict:
     s = store.get_session(session_id)
     if s is None:
         raise KeyError(session_id)
-    stances = {m: v for m, v in store.current_stances(session_id).items() if m != "emperor"}
+    stances = _debaters(store.current_stances(session_id))
     rounds = store.count_traces(session_id, "speak")
     return {
         "id": s["id"], "topic": s["topic"], "context": s["context"], "lang": s["lang"],
         "status": s["status"], "verdict": s["verdict"], "lean": s["lean"],
         "round": rounds, "rounds_left": max(0, ROUNDS_PER_SESSION - rounds),
         "tally": _tally(stances),
+        # 谏言是对已有发言的一个视角，不是新内容，所以不落 turn 表：
+        # 把原话再存一遍会在评估里变成一条重复台词，而那不是模型的锅。
+        "remonstrance": (_remonstrance(s["verdict"], stances, s["turns"])
+                         if s["status"] == "decided" else None),
         # 辩论的十一位 + 末位的应声。tally 只数前十一位：应声没有票，它只是回声。
         "ministers": [{"id": m, **roster.ROSTER[m], "stance": v["stance"],
                        "influence": v["influence"]} for m, v in stances.items()]
