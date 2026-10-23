@@ -17,6 +17,32 @@ from app.back.ministers import roster  # noqa: E402
 from app.back.services import court  # noqa: E402
 
 
+def test_user_read_is_pinned_and_targeted():
+    """用户改过的字段，拾荒改不动；而且这些话只给看得见的那几位大臣。"""
+    s = court.open_court("要不要辞职去开一家猫咖", "存款够撑 8 个月")
+    store.add_user_read(s["id"], "raccoon",
+                        {"anxiety": "存款见底", "impulse": "明天就辞",
+                         "stake": "八个月生活费", "deadline": "房东涨租"})
+    store.add_user_read(s["id"], "user", {"anxiety": "怕被人笑话", "impulse": "",
+                                          "stake": "", "deadline": ""})
+
+    # 按字段取最新：用户只改了一项，拾荒整理的另外三项不该被抹掉
+    m = store.user_read()
+    assert m["anxiety"] == {"text": "怕被人笑话", "source": "user"}, m
+    assert m["impulse"]["text"] == "明天就辞" and m["impulse"]["source"] == "raccoon", m
+
+    # 断了模型，拾荒整理只会回退到档案原样 —— 用户钉死的那项必须还在
+    court.read_user(s["id"])
+    assert store.user_read()["anxiety"]["source"] == "user", "用户定的被模型盖掉了"
+
+    # 定向：维斯帕看得到怕什么和赌注，跺脚将军看不到
+    fox = court._private_block(["fox"])
+    assert "怕被人笑话" in fox and "八个月生活费" in fox, fox
+    assert "明天就辞" not in fox, "维斯帕不该看见冲动那一项"
+    assert court._private_block(["snake", "banana", "octopus"]) == "", "这几位不该拿到用户状态"
+    assert "明天就辞" in court._private_block(["rabbit"])
+
+
 def test_lean_does_not_reach_debaters():
     """皇帝倾向不许影响任何一位辩论大臣 —— 硬约束 3 的可执行版本。
 
@@ -123,6 +149,7 @@ def main():
         pass
 
     malformed_shapes()
+    test_user_read_is_pinned_and_targeted()
     test_lean_does_not_reach_debaters()   # 要多开三局，放在 sessions 断言之后
     print_ok(s, st)
 

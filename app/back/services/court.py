@@ -45,6 +45,97 @@ def _fallback_open(topic: str, lang: str = "zh") -> dict:
     return {"ministers": out}
 
 
+# ---------- 拾荒的用户档案 ----------
+
+# 谁看得见用户状态的哪一项。其余六位看不到 —— 它们代表的偏见本来就不关心你的心情，
+# 全员都知道，只会让十一个角色一起变成心理咨询师。见 docs/system_design_v0.md M2.3。
+SEES = {
+    "fox":    ("anxiety", "stake"),     # 风险规避：它的工作就是放大你怕的那件事
+    "fish":   ("anxiety",),             # 信息流焦虑：把你的私人恐慌接到公共恐慌上
+    "rabbit": ("impulse", "deadline"),  # 行动偏好：它催的正是你本来就想干的
+    "horse":  ("impulse",),             # 竞争：把你的冲动包装成胜利叙事
+    "collie": store.READ_FIELDS,        # 规则与成本：只有它会把焦虑换算成数字
+}
+
+FIELD_NAME = {
+    "zh": {"anxiety": "真正怕失去的", "impulse": "想立刻就做的",
+           "stake": "赌上的", "deadline": "真实的时间压力"},
+    "en": {"anxiety": "really afraid to lose", "impulse": "itching to do right now",
+           "stake": "what is on the table", "deadline": "the real time pressure"},
+}
+
+READ_SYS = """你是拾荒（🦝 浣熊），朝堂的档案官。你不发表意见，只整理档案。
+给你皇帝历次说过的话，你要从里面看出四件事：他真正怕失去什么、他想立刻做什么、
+他赌上的是什么、他真实的时间压力是什么。
+只写有依据的那几项，没依据就留空 —— 档案官不编。每项 20 字以内，第三人称。"""
+
+
+def _user_material(session_id: str) -> str:
+    """拾荒手上的材料：用户说过的话，不只是这一局的奏章。"""
+    s = store.get_session(session_id)
+    if s is None:
+        return ""
+    out = [f"本次奏章：{s['topic']}"]
+    if s["context"]:
+        out.append(f"背景：{s['context']}")
+    out += [f"圣旨：{t['text']}" for t in s["turns"]
+            if t["kind"] == "decree" and (t["text"] or "").strip()]
+    past = [r["topic"] for r in store.list_sessions(10) if r["id"] != session_id]
+    if past:
+        out.append("此前问过：" + "、".join(past[:8]))
+    return "\n".join(out)
+
+
+def read_user(session_id: str) -> dict:
+    """拾荒重新整理一次用户档案，追加一行。
+
+    只在用户又说了一句话时调用（开堂、下旨），不按回合调 ——
+    模型调用次数跟着用户开口次数走，辩论跑五轮不会多花一次。
+
+    用户亲手改过的字段由代码钉死后覆盖，不靠 prompt 请求模型别动：规则归代码。
+    模型看得见它们（有助于推断别的字段），但改不动。
+    """
+    cur = store.user_read()
+    pinned = {f: v["text"] for f, v in cur.items() if v["source"] == "user"}
+    fb = {f: cur.get(f, {}).get("text", "") for f in store.READ_FIELDS}
+
+    prompt = (f"{_user_material(session_id)}\n\n"
+              + (f"档案里已经记着：{json.dumps(fb, ensure_ascii=False)}\n"
+                 "有新证据就改，没有就照抄。\n" if any(fb.values()) else "")
+              + (f"这几项是皇帝亲口定的：{json.dumps(pinned, ensure_ascii=False)}\n"
+                 if pinned else "")
+              + '返回 JSON：{"anxiety":"…","impulse":"…","stake":"…","deadline":"…"}，'
+                "没依据的留空字符串。")
+    data, _ = llm.complete_json(
+        [{"role": "system", "content": READ_SYS},
+         {"role": "user", "content": prompt}],
+        op="read_user", minister="raccoon", session_id=session_id,
+        max_tokens=300, fallback=fb)
+
+    out = {f: str(_as_dict(data).get(f) or "").strip()[:40] for f in store.READ_FIELDS}
+    out.update(pinned)          # 规则在代码里：用户钉死的字段，模型改不动
+    if any(out.values()) and out != fb:
+        store.add_user_read(session_id, "raccoon", out)
+    return out
+
+
+def _private_block(mids, lang: str = "zh") -> str:
+    """定向投喂：只把用户状态给 SEES 里的那几位，而且写明别人不知道。"""
+    read = store.user_read()
+    if not read:
+        return ""
+    names = FIELD_NAME.get(lang, FIELD_NAME["zh"])
+    rows = []
+    for mid in mids:
+        seen = [f"{names[f]}：{read[f]['text']}" for f in SEES.get(mid, ()) if f in read]
+        if seen:
+            rows.append(f"{mid} 私下知道皇帝 " + "；".join(seen))
+    if not rows:
+        return ""
+    return ("以下几条只有对应的那位大臣知道，别让其他人说出来，也不要直接复述：\n"
+            + "\n".join(rows) + "\n\n")
+
+
 # ---------- 开堂 ----------
 
 OPEN_SYS = """你是一场荒诞朝堂喜剧的编剧。十一位动物大臣要就皇帝的议题各自站队。
@@ -56,8 +147,11 @@ def open_court(topic: str, context: str = "", lang: str = "zh") -> dict:
     sid = store.create_session(topic, context, lang)
     # 奏章背景切句入库，蝴蝶后面就有东西可检索。没有背景就等浣熊往里存。
     library.add_facts(library.split_sentences(context), session_id=sid, source="petition")
+    # 拾荒先翻一遍档案：这一局的奏章 + 历次圣旨 + 此前问过的议题
+    read_user(sid)
     prompt = (f"议题：{topic}\n背景：{context or '（无）'}\n\n大臣名册：\n{roster.roster_block(lang)}\n\n"
-              '返回 JSON：{"ministers":{"大臣id":{"stance":"pro|con|undecided","text":"开场白"}, ...}}，'
+              + _private_block(roster.DEBATERS, lang)
+              + '返回 JSON：{"ministers":{"大臣id":{"stance":"pro|con|undecided","text":"开场白"}, ...}}，'
               "十一位全部要有。至少 3 位 pro、至少 3 位 con。")
     data, _ = llm.complete_json(
         [{"role": "system", "content": f"{OPEN_SYS}\n{LANG_RULE.get(lang, LANG_RULE['zh'])}"},
@@ -152,6 +246,7 @@ def next_round(session_id: str) -> dict:
                   + (("蝴蝶（moth）从文库里查到这些材料，它只会挑对自己立场有利的引用，"
                       "不利的直接无视：\n"
                       + "\n".join(f"- {h['text']}" for h in hits) + "\n\n") if hits else "")
+                  + _private_block(speakers, s['lang'])
                   + '返回 JSON：{"clash":[{"minister":"id","text":"…"},{"minister":"id","text":"…"}],'
                     '"lobby":{"text":"…","reply":"…"}}')
         lines, _ = llm.complete_json(
@@ -210,6 +305,9 @@ def decree(session_id: str, kind: str, lean_delta: float = 0.0, text: str = "") 
     store.add_turn(session_id, "emperor", "decree", "undecided",
                    text.strip() or {"silence": "💥 肃静！", "swap": "🖌 朱笔一挥。",
                                     "banana": "🍌 天降香蕉。"}.get(kind, kind), influence=0.0)
+    # 用户又开口了，拾荒重新整理一次。空圣旨（纯按钮）不算说话，不花这次调用。
+    if text.strip():
+        read_user(session_id)
     return snapshot(session_id)
 
 
@@ -322,6 +420,8 @@ def snapshot(session_id: str) -> dict:
         "tally": _tally(stances),
         # 谏言是对已有发言的一个视角，不是新内容，所以不落 turn 表：
         # 把原话再存一遍会在评估里变成一条重复台词，而那不是模型的锅。
+        # 拾荒整理出来的用户状态。前端照它渲染「朕的心事」，也照它提交修改。
+        "mind": store.user_read(),
         "remonstrance": (_remonstrance(s["verdict"], stances, s["turns"])
                          if s["status"] == "decided" else None),
         # 辩论的十一位 + 末位的应声。tally 只数前十一位：应声没有票，它只是回声。
