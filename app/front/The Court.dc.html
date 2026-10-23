@@ -249,6 +249,17 @@
       <div style="font:800 12px/1 'Baloo 2',sans-serif; letter-spacing:2px; color:#847d88;">{{ t.petLabel }}</div>
       <input value="{{ topic }}" onInput="{{ topicChange }}" placeholder="{{ t.topicPh }}" style="margin-top:12px; width:100%; border:3px solid #2b2733; border-radius:14px; background:#f7f4ec; padding:12px 13px; font:400 21px/1.3 {{ dispFont }}; color:#2b2733; outline:none; box-shadow:3px 4px 0 rgba(178,166,140,.75);">
       <input value="{{ ctx }}" onInput="{{ ctxChange }}" placeholder="{{ t.ctxPh }}" style="margin-top:9px; width:100%; border:2.5px dashed rgba(43,39,51,.4); border-radius:12px; background:transparent; padding:9px 12px; font:600 14px/1.4 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#2b2733; outline:none;">
+      <div style="margin-top:14px;">
+        <label for="leanOpen" style="display:block; font:800 12px/1 'Baloo 2',sans-serif; letter-spacing:2px; color:#847d88;">{{ t.leanLabel }}</label>
+        <input id="leanOpen" type="range" min="-1" max="1" step="0.1" value="{{ leanOpen }}" onInput="{{ leanChange }}"
+               aria-describedby="leanWord" style="margin-top:9px; width:100%; accent-color:#a4726a; cursor:pointer;">
+        <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px; font:600 11px/1.3 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#6b6470;">
+          <span>{{ t.leanCon }}</span>
+          <b id="leanWord" style="font:800 12px/1.3 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#a4726a;">{{ leanWord }}</b>
+          <span>{{ t.leanPro }}</span>
+        </div>
+        <p style="margin:7px 0 0; font:600 11.5px/1.5 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#6b6470;">{{ t.leanHint }}</p>
+      </div>
       <div style="margin-top:12px; font:600 14.5px/1.55 'Baloo 2',sans-serif; color:{{ errColor }};">{{ stakesLine }}</div>
       <div style="margin-top:24px;">
         <div style="display:flex; align-items:center; gap:8px; padding-bottom:8px; border-bottom:3px solid #2b2733;">
@@ -462,19 +473,39 @@
       <span>{{ t.verKicker }}</span>
       <span style="background:#2b2733; border:2.5px solid #f1ede4; border-radius:10px; padding:4px 9px; transform:rotate(-2deg);">{{ t.verChip }}</span>
     </div>
-    <div style="flex:1; position:relative; padding:0 38px 0 18px; display:flex; flex-direction:column; justify-content:center; overflow:hidden;">
+    <div style="flex:1; position:relative; padding:14px 38px 14px 18px; display:flex; flex-direction:column; justify-content:center; overflow-y:auto;">
       <span style="position:absolute; right:20px; top:24px; color:#b2a181; font-size:30px; -webkit-text-stroke:2px #2b2733; animation:sparkle 1.3s ease-in-out infinite;">✦</span>
       <span style="position:absolute; left:16px; bottom:30px; color:#b2a181; font-size:22px; -webkit-text-stroke:2px #2b2733; animation:sparkle 1.7s .4s ease-in-out infinite;">✦</span>
       <div style="position:relative; animation:riseIn .6s cubic-bezier(.2,.9,.2,1) both;">
         <div style="font:{{ t.verTitleFont }}; letter-spacing:-1px; color:#b2a181; -webkit-text-stroke:4px #2b2733; paint-order:stroke fill; text-shadow:6px 7px 0 #2b2733;">{{ t.verTitle1 }}<span style="color:transparent; -webkit-text-stroke:3px #f1ede4; text-shadow:none;">{{ t.verTitle2 }}</span></div>
         <div style="margin-top:14px; font:400 19px/1.5 {{ dispFont }}; color:#f1ede4;">{{ decreeText }}</div>
         <div style="margin-top:7px; font:400 13px/1.4 {{ dispFont }}; color:rgba(241,237,228,.78);">{{ decreeBy }}</div>
+        <sc-if value="{{ hasMirror }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:16px; padding-top:12px; border-top:3px solid rgba(241,237,228,.3);">
+            <div style="font:400 15px/1.2 {{ dispFont }}; letter-spacing:1.5px; color:#f1ede4;">🪞 {{ t.mirrorTitle }}</div>
+            <div style="margin-top:9px; font:800 10px/1.2 'Baloo 2',sans-serif; letter-spacing:1.2px; color:#d8c9a4;">{{ t.mirrorPushed }}</div>
+            <sc-for list="{{ mirrorPushed }}" as="m" hint-placeholder-count="3">
+              <div style="margin-top:6px; display:flex; align-items:baseline; gap:7px;">
+                <span aria-hidden="true" style="font-size:15px;">{{ m.head }}</span>
+                <b style="flex:none; font:400 13px/1.4 {{ dispFont }}; color:#f1ede4;">{{ m.name }}</b>
+                <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:600 12px/1.4 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:rgba(241,237,228,.92);">{{ m.text }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
         <sc-if value="{{ hasRemons }}" hint-placeholder-val="{{ true }}">
           <figure style="margin:14px 0 0; padding:11px 13px; border-left:3px solid #b2a181; background:rgba(43,39,51,.28);">
             <div style="font:400 12px/1.3 {{ dispFont }}; color:#d8c9a4; letter-spacing:.08em;">{{ t.remonsWord }}</div>
             <blockquote style="margin:5px 0 0; font:400 16px/1.5 {{ dispFont }}; color:#f1ede4;">{{ remonsText }}</blockquote>
             <figcaption style="margin-top:5px; font:400 13px/1.4 {{ dispFont }}; color:rgba(241,237,228,.78);">{{ remonsBy }}</figcaption>
           </figure>
+        </sc-if>
+        <sc-if value="{{ hasConfirm }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:12px; display:flex; align-items:baseline; gap:9px;">
+            <span style="font:800 10px/1.2 'Baloo 2',sans-serif; letter-spacing:1.2px; color:#d8c9a4;">{{ t.mirrorConfirm }}</span>
+            <b style="font:400 20px/1 'Lilita One',sans-serif; color:#f1ede4;">{{ confirmRate }}</b>
+            <span style="min-width:0; font:600 11.5px/1.45 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:rgba(241,237,228,.92);">{{ confirmLine }}</span>
+          </div>
         </sc-if>
         <div style="margin-top:18px; display:flex; align-items:baseline; gap:13px;">
           <span style="font:400 54px/1 'Lilita One',sans-serif; text-shadow:4px 4px 0 #2b2733;">{{ proN }}</span>
@@ -588,7 +619,8 @@
 class Component extends DCLogic {
   state = { screen: 1, lang: 'en', duelTurn: 0, poke: null, lobPhase: 0, lobSc: 'A', fishCamp: 'pro', rotTick: 0, itvOpen: false, itv: null, castPoke: null, pairIdx: 0, cut: null,
             topic: '', ctx: '', sid: null, live: null, feed: [], phase: 'idle', err: '', wide: false,
-            mindEdit: {} };   // 心事的本地草稿：没按「改定」之前不发给后端
+            mindEdit: {},    // 心事的本地草稿：没按「改定」之前不发给后端
+            leanOpen: 0 };   // 递奏章时的倾向，开堂那一下送出去，之后不再问
 
   // ---- 后端 ----
   // phase: idle 还没开堂 · opening 等十一位大臣表态 · debating 直播中 · recess 辩完待裁决 · offline 后端不在
@@ -611,7 +643,9 @@ class Component extends DCLogic {
     this.closeStream();
     this.setState({ screen: 4, phase: 'opening', err: '', feed: [], live: null, sid: null });
     try {
-      const s = await this.api('/api/court', { topic, context: this.state.ctx, lang: this.state.lang });
+      const s = await this.api('/api/court', { topic, context: this.state.ctx,
+                                               lang: this.state.lang,
+                                               lean_open: Number(this.state.leanOpen) || 0 });
       this.setState({ sid: s.id, live: s, phase: 'debating' });
       this.openStream(s.id, s.turns.length);
     } catch (e) {
@@ -621,6 +655,15 @@ class Component extends DCLogic {
   }
 
   // 「朕的心事」四项。拾荒整理出来的存在 live.mind，用户改的先落在 state.mindEdit。
+  // 滑条的文字读数。只分三档：再细的刻度是假精度，用户也说不出 0.4 和 0.5 的区别。
+  leanWord() {
+    const zh = this.state.lang === 'zh';
+    const v = Number(this.state.leanOpen) || 0;
+    if (v <= -0.34) return zh ? '偏驳回' : 'LEANING NO';
+    if (v >= 0.34)  return zh ? '偏准奏' : 'LEANING YES';
+    return zh ? '尚无定见' : 'UNDECIDED';
+  }
+
   mindFields() {
     const zh = this.state.lang === 'zh';
     return [
@@ -832,6 +875,19 @@ class Component extends DCLogic {
         });
       }),
       mindClean: !Object.keys(this.state.mindEdit || {}).length,
+      hasMirror: !!(L.mirror && L.mirror.pushed && L.mirror.pushed.length),
+      mirrorPushed: ((L.mirror || {}).pushed || []).map(m => ({
+        head: meta[m.minister] ? meta[m.minister].head : '·',
+        name: nameOf(m.minister),
+        text: m.text,
+      })),
+      hasConfirm: !!(L.mirror && L.mirror.confirm),
+      confirmRate: (L.mirror && L.mirror.confirm)
+                 ? Math.round(L.mirror.confirm.rate * 100) + '%' : '',
+      confirmLine: (L.mirror && L.mirror.confirm)
+                 ? (zh ? `过去 ${L.mirror.confirm.n} 次朝会里，有 ${L.mirror.confirm.hit} 次你的裁决和开场倾向一致`
+                       : `${L.mirror.confirm.hit} of your last ${L.mirror.confirm.n} verdicts matched the way you walked in`)
+                 : '',
       hasRemons: !!L.remonstrance,
       remonsText: L.remonstrance ? L.remonstrance.text : '',
       remonsBy: L.remonstrance
@@ -1126,6 +1182,9 @@ class Component extends DCLogic {
       mindTitle:'朕的心事', mindBy:'拾荒整理', mindSave:'朕亲自改定',
       mindByUser:'朕亲定', mindByRaccoon:'拾荒记的',
       mindHint:'拾荒从你历次奏章和圣旨里攒出来的。记错了就改 —— 你改过的它不会再动。',
+      leanLabel:'递上去之前，你心里偏哪边', leanCon:'偏驳回', leanPro:'偏准奏',
+      leanHint:'现在说。朝会散了才算得出你是不是早就定了 —— 事后再问，拿到的是合理化。',
+      mirrorTitle:'朝堂镜', mirrorPushed:'推你过去的', mirrorConfirm:'你的确认率',
     };
     const T_EN = {
       epChip:'EP.108 · A DAILY SHOW',
@@ -1177,6 +1236,9 @@ class Component extends DCLogic {
       mindTitle:'WHAT WEIGHS ON YOU', mindBy:'FILED BY TRASH', mindSave:'SET IT MYSELF',
       mindByUser:'SET BY YOU', mindByRaccoon:'ON FILE',
       mindHint:'Pieced together from your petitions and decrees. Wrong? Fix it — the archivist will not touch what you set.',
+      leanLabel:'BEFORE YOU FILE IT — WHICH WAY DO YOU LEAN?', leanCon:'TOWARD NO', leanPro:'TOWARD YES',
+      leanHint:'Say it now. Asked afterwards, you would only rationalise it.',
+      mirrorTitle:'THE COURT MIRROR', mirrorPushed:'WHO PUSHED YOU THERE', mirrorConfirm:'YOU CONFIRMED YOURSELF',
     };
     const t = zh ? T_ZH : T_EN;
 
@@ -1426,6 +1488,9 @@ class Component extends DCLogic {
       topic: this.state.topic,
       ctx: this.state.ctx,
       topicChange: (e) => this.setState({ topic: e.target.value, err: '' }),
+      leanOpen: this.state.leanOpen,
+      leanWord: this.leanWord(),
+      leanChange: (e) => this.setState({ leanOpen: Number(e.target.value) }),
       ctxChange: (e) => this.setState({ ctx: e.target.value }),
       startCourt: () => this.startCourt(),
       stakesLine: this.state.err || t.stakes,
@@ -1455,7 +1520,21 @@ class Component extends DCLogic {
                      'Rent rises next year'][i],
       })),
       mindClean: true,
-      hasRemons: false, remonsText: '', remonsBy: '',
+      // 判决屏的朝堂镜：离线时是演示值，liveView() 会盖掉
+      hasMirror: true, hasConfirm: true,
+      mirrorPushed: zh
+        ? [{ head:'🐰', name:'跺脚将军', text:'拖着才是最大的成本！' },
+           { head:'🐴', name:'奔骥',     text:'赢不赢，就看这一把。' },
+           { head:'🦝', name:'拾荒',     text:'您去年也说过同样的话。' }]
+        : [{ head:'🐰', name:'GEN. THUMP', text:'DELAY IS THE REAL COST!' },
+           { head:'🐴', name:'GALLOP',     text:'WIN OR GO HOME.' },
+           { head:'🦝', name:'TRASH',      text:'YOU SAID THAT LAST YEAR TOO.' }],
+      confirmRate: '90%',
+      confirmLine: zh ? '过去 10 次朝会里，有 9 次你的裁决和开场倾向一致'
+                      : '9 of your last 10 verdicts matched the way you walked in',
+      hasRemons: true,
+      remonsText: zh ? '此事必有蹊跷，臣以为不可' : 'SOMETHING IS OFF HERE. I SAY NO.',
+      remonsBy: zh ? '🦊 维斯帕 · 反对' : '🦊 VESPER · CON',
       needVerdict: false,
       rulings: [
         { key:'approve', icon:'✅', label:t.ruleApprove, bg:'#f1ede4', fg:'#2b2733' },
