@@ -357,7 +357,8 @@ user_read_churn   = 相邻两次整理之间变化的字段比例     —— 在
 [court.py:217](../app/back/services/court.py#L217) `verdict()` 写完判词就 `end_session()`。
 `snapshot()` 只是前端和监控台共用的数据形状。监控台（仓库根 [index.html](../index.html)）
 展示的是调用量、tokens、成本、延迟 p95、兜底率 —— 工程指标，不是用户洞察。
-御笔批注停在 `localStorage`，跨局统计不了。
+御笔批注**根本不存在** —— 本节原来写它「停在 localStorage，跨局统计不了」，
+是照抄 README 产品描述里的话，没去翻代码。前端的 `localStorage` 只存了一个语言设置。
 
 ### 机制设计
 
@@ -394,10 +395,19 @@ verdict_aligned INTEGER                     -- 裁决与 lean_open 同向？1/0�
 
 老库靠 `store.LATE_COLUMNS` 补列：`CREATE TABLE IF NOT EXISTS` 不会动已经存在的表。
 
-**M3.3 御笔批注进库（后续）**
+**M3.3 御笔批注**（已实现 2026-10-23）
 
-批注从 `localStorage` 挪到 `turn` 表（`kind="note"`），这样「你总是收藏维斯帕的发言」
-这类跨局模式才算得出来。v0 不做，但新表设计时留好位置。
+原计划写的是「从 `localStorage` 挪进 `turn` 表」。动手才发现没有可挪的东西：
+这个功能从来没做过。所以这一步是把它建出来，不是搬家。
+
+批注记成皇帝的一行：`minister="emperor"`、`kind="note"`、`target` 指向被收藏的那位大臣。
+这样它既不进评估的分母（`score_case` 滤掉 emperor），也不会被当成一次发言算进回合。
+
+落库而不是浏览器，是因为**批注的价值在跨局** —— 攒够了才看得出「你总是收藏谁」。
+朝堂镜因此多一行：`favorite`，少于 3 条批注返回 `None`。
+一两条是巧合，不是倾向；空就显示空，不编造。
+
+界面上，每条实录发言后面有一个「御笔收藏」，皇帝自己的圣旨和判词没有。
 
 ### 验收指标
 
