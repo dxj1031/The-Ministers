@@ -82,8 +82,32 @@
   @media (min-width:480px) and (min-height:1098px) { :root { --mm-scale:1.30; } }
   @media (min-width:480px) and (min-height:1140px) { :root { --mm-scale:1.35; } }
 
-  /* ── desktop only · 朝堂实录 ── */
-  .mm-log { flex:0 1 400px; min-width:0; margin-left:24px; height:calc(844px * var(--mm-scale)); max-height:100dvh;
+  /* ── desktop only · 右栏：朕的心事 + 朝堂实录 ──
+     手机上这一整栏不出现（和实录一直以来的规则一样）：390 的框里塞不下第二套面板，
+     硬塞只会把朝堂挤变形。桌面端两段共用同一套边框、圆角、底色和投影。 */
+  .mm-rail { flex:0 1 400px; min-width:0; margin-left:24px; height:calc(844px * var(--mm-scale));
+             max-height:100dvh; display:flex; flex-direction:column; gap:14px; }
+  .mm-mind { flex:none; display:flex; flex-direction:column; background:#2b2733; color:#f1ede4;
+             border:4px solid #b2a181; border-radius:18px; overflow:hidden;
+             font-family:'Baloo 2','ZCOOL KuaiLe',sans-serif; box-shadow:6px 7px 0 rgba(0,0,0,.45); }
+  .mm-mind-body { padding:12px 14px 14px; display:flex; flex-direction:column; gap:10px; }
+  .mm-mind-row { display:flex; flex-direction:column; gap:4px; }
+  .mm-mind-row label { font:800 10px/1.2 'Baloo 2',sans-serif; letter-spacing:1.2px; color:#d8c9a4; }
+  .mm-mind-row input { width:100%; box-sizing:border-box; border:2px solid rgba(241,237,228,.3);
+             border-radius:9px; background:rgba(241,237,228,.07); padding:7px 9px;
+             font:600 13px/1.4 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#f1ede4; outline:none; }
+  .mm-mind-row input:focus-visible { outline:3px solid #b2a181; outline-offset:1px; border-color:#b2a181; }
+  .mm-mind-row input::placeholder { color:rgba(241,237,228,.45); }
+  .mm-mind-by { font:800 9px/1.2 'Baloo 2',sans-serif; letter-spacing:1px; color:#a9a3ab; }
+  .mm-mind-save { all:unset; align-self:flex-start; cursor:pointer; border:2.5px solid #2b2733;
+             border-radius:11px; background:#b2a181; color:#2b2733; padding:7px 15px;
+             font:800 12px/1 'Baloo 2','ZCOOL KuaiLe',sans-serif; letter-spacing:1px;
+             box-shadow:2.5px 2.5px 0 #1c1a20; }
+  .mm-mind-save:focus-visible { outline:3px solid #f1ede4; outline-offset:2px; }
+  .mm-mind-save[disabled] { cursor:default; background:rgba(241,237,228,.14); color:#a9a3ab;
+             border-color:rgba(241,237,228,.2); box-shadow:none; }
+
+  .mm-log { flex:1 1 auto; min-width:0; min-height:0;
             display:flex; flex-direction:column; background:#2b2733; color:#f1ede4;
             border:4px solid #b2a181; border-radius:18px; overflow:hidden;
             font-family:'Baloo 2','ZCOOL KuaiLe',sans-serif; box-shadow:6px 7px 0 rgba(0,0,0,.45); }
@@ -93,7 +117,7 @@
                  scrollbar-color:#b2a181 #2b2733; }
   .mm-log-body:focus-visible { outline:3px solid #b2a181; outline-offset:-3px; }
   /* sc-if 已经不渲染了；这条只是兜底，保证窄屏任何一帧都不可能占位 */
-  @media (max-width:1023px) { .mm-log { display:none; } }
+  @media (max-width:1023px) { .mm-rail { display:none; } }
 </style>
 </helmet>
 
@@ -504,8 +528,28 @@
 </div>
 </div>
 
-<!-- ====================== DESKTOP ONLY · 朝堂实录 / TRANSCRIPT ====================== -->
+<!-- ============ DESKTOP ONLY · 右栏：朕的心事 + 朝堂实录 ============ -->
 <sc-if value="{{ wideOn }}" hint-placeholder-val="{{ false }}">
+<div class="mm-rail">
+
+<section class="mm-mind" aria-label="{{ t.mindTitle }}">
+  <h2 class="mm-log-head">
+    <span style="font:400 22px/1.1 {{ dispFont }}; letter-spacing:2px; color:#f1ede4;">🦝 {{ t.mindTitle }}</span>
+    <span style="font:800 11px/1 'Baloo 2',sans-serif; letter-spacing:1.5px; color:#b2a181;">{{ t.mindBy }}</span>
+  </h2>
+  <div class="mm-mind-body">
+    <p style="margin:0; font:600 11px/1.5 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#a9a3ab;">{{ t.mindHint }}</p>
+    <sc-for list="{{ mindRows }}" as="f" hint-placeholder-count="4">
+      <div class="mm-mind-row">
+        <label for="{{ f.id }}">{{ f.label }} <span class="mm-mind-by">{{ f.by }}</span></label>
+        <input id="{{ f.id }}" value="{{ f.value }}" onChange="{{ f.change }}"
+               placeholder="{{ f.ph }}" maxLength="{{ 60 }}">
+      </div>
+    </sc-for>
+    <button class="mm-mind-save" onClick="{{ mindSave }}" disabled="{{ mindClean }}">{{ t.mindSave }}</button>
+  </div>
+</section>
+
 <section class="mm-log" aria-label="{{ t.logTitle }}">
   <h2 class="mm-log-head">
     <span style="font:400 22px/1.1 {{ dispFont }}; letter-spacing:2px; color:#f1ede4;">📜 {{ t.logTitle }}</span>
@@ -529,6 +573,8 @@
     </sc-for>
   </div>
 </section>
+
+</div>
 </sc-if>
 
 </div>
@@ -541,7 +587,8 @@
 }">
 class Component extends DCLogic {
   state = { screen: 1, lang: 'en', duelTurn: 0, poke: null, lobPhase: 0, lobSc: 'A', fishCamp: 'pro', rotTick: 0, itvOpen: false, itv: null, castPoke: null, pairIdx: 0, cut: null,
-            topic: '', ctx: '', sid: null, live: null, feed: [], phase: 'idle', err: '', wide: false };
+            topic: '', ctx: '', sid: null, live: null, feed: [], phase: 'idle', err: '', wide: false,
+            mindEdit: {} };   // 心事的本地草稿：没按「改定」之前不发给后端
 
   // ---- 后端 ----
   // phase: idle 还没开堂 · opening 等十一位大臣表态 · debating 直播中 · recess 辩完待裁决 · offline 后端不在
@@ -570,6 +617,40 @@ class Component extends DCLogic {
     } catch (e) {
       // 后端没起来不该白屏：退回演示朝堂，只在奏章屏留一句人话
       this.setState({ phase: 'offline', err: (zh ? '朝堂离线，正在放演示：' : 'Court offline, showing demo: ') + (e.message || e) });
+    }
+  }
+
+  // 「朕的心事」四项。拾荒整理出来的存在 live.mind，用户改的先落在 state.mindEdit。
+  mindFields() {
+    const zh = this.state.lang === 'zh';
+    return [
+      { key:'anxiety',  label: zh ? '真正怕失去的'   : 'AFRAID TO LOSE',
+        ph: zh ? '拾荒还没看出来' : 'nothing on file yet' },
+      { key:'impulse',  label: zh ? '想立刻就做的'   : 'ITCHING TO DO',
+        ph: zh ? '拾荒还没看出来' : 'nothing on file yet' },
+      { key:'stake',    label: zh ? '赌上的'         : 'ON THE TABLE',
+        ph: zh ? '拾荒还没看出来' : 'nothing on file yet' },
+      { key:'deadline', label: zh ? '真实的时间压力' : 'REAL DEADLINE',
+        ph: zh ? '拾荒还没看出来' : 'nothing on file yet' },
+    ];
+  }
+
+  mindValue(key) {
+    const draft = this.state.mindEdit || {};
+    if (key in draft) return draft[key];
+    const m = (this.state.live && this.state.live.mind) || {};
+    return m[key] ? m[key].text : '';
+  }
+
+  async saveMind() {
+    if (!this.state.sid) return;
+    const body = {};
+    this.mindFields().forEach(f => { body[f.key] = this.mindValue(f.key); });
+    try {
+      const live = await this.api('/api/court/' + this.state.sid + '/mind', body);
+      this.setState({ live, mindEdit: {} });
+    } catch (e) {
+      this.setState({ err: String(e.message || e) });
     }
   }
 
@@ -739,6 +820,18 @@ class Component extends DCLogic {
               ? (meta[verdictTurn.minister].head + ' ' + nameOf(verdictTurn.minister)
                  + (zh ? ' 代宣' : ' READS THE DECREE'))
               : '',
+      mindRows: this.mindFields().map(f => {
+        const src = ((L.mind || {})[f.key] || {}).source;
+        return Object.assign({}, f, {
+          id: 'mind-' + f.key,
+          value: this.mindValue(f.key),
+          by: src === 'user' ? t.mindByUser : (src ? t.mindByRaccoon : ''),
+          change: (e) => this.setState(st => ({
+            mindEdit: Object.assign({}, st.mindEdit, { [f.key]: e.target.value }),
+          })),
+        });
+      }),
+      mindClean: !Object.keys(this.state.mindEdit || {}).length,
       hasRemons: !!L.remonstrance,
       remonsText: L.remonstrance ? L.remonstrance.text : '',
       remonsBy: L.remonstrance
@@ -1030,6 +1123,9 @@ class Component extends DCLogic {
       logKind:{ opening:'表态', rebuttal:'驳斥', lobby:'游说', decree:'圣旨', verdict:'判词' },
       logStance:{ pro:'赞成', con:'反对', undecided:'中立' },
       logEmperor:'猫皇', logUnit:' 条', remonsWord:'谏言 · 朝堂上最大的反对',
+      mindTitle:'朕的心事', mindBy:'拾荒整理', mindSave:'朕亲自改定',
+      mindByUser:'朕亲定', mindByRaccoon:'拾荒记的',
+      mindHint:'拾荒从你历次奏章和圣旨里攒出来的。记错了就改 —— 你改过的它不会再动。',
     };
     const T_EN = {
       epChip:'EP.108 · A DAILY SHOW',
@@ -1078,6 +1174,9 @@ class Component extends DCLogic {
       logKind:{ opening:'OPENING', rebuttal:'REBUTTAL', lobby:'LOBBY', decree:'DECREE', verdict:'VERDICT' },
       logStance:{ pro:'PRO', con:'CON', undecided:'SWING' },
       logEmperor:'THE EMPEROR', logUnit:' LINES', remonsWord:'REMONSTRANCE · THE LOUDEST DISSENT',
+      mindTitle:'WHAT WEIGHS ON YOU', mindBy:'FILED BY TRASH', mindSave:'SET IT MYSELF',
+      mindByUser:'SET BY YOU', mindByRaccoon:'ON FILE',
+      mindHint:'Pieced together from your petitions and decrees. Wrong? Fix it — the archivist will not touch what you set.',
     };
     const t = zh ? T_ZH : T_EN;
 
@@ -1349,6 +1448,13 @@ class Component extends DCLogic {
       proN: '6', conN: '3', absN: '2',
       decreeText: t.decree,
       decreeBy: '🦜 ' + (zh ? '应声 代宣' : 'ECHO READS THE DECREE'),
+      mindRows: this.mindFields().map((f, i) => Object.assign({}, f, {
+        id: 'mind-' + f.key, by: '', change: () => {},
+        value: zh ? ['存款撑不到回本', '明天就递辞职', '八个月生活费', '房东明年涨租'][i]
+                  : ['Savings run out first', 'Quit tomorrow', 'Eight months of rent',
+                     'Rent rises next year'][i],
+      })),
+      mindClean: true,
       hasRemons: false, remonsText: '', remonsBy: '',
       needVerdict: false,
       rulings: [

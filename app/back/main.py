@@ -81,6 +81,14 @@ class VerdictReq(BaseModel):
     choice: str
 
 
+class MindReq(BaseModel):
+    """用户亲手改的心事。四项都给，留空表示这一项不是用户定的。"""
+    anxiety: str = Field(default="", max_length=60)
+    impulse: str = Field(default="", max_length=60)
+    stake: str = Field(default="", max_length=60)
+    deadline: str = Field(default="", max_length=60)
+
+
 def _court(fn, *a):
     try:
         return fn(*a)
@@ -147,6 +155,14 @@ def court_stream(session_id: str, after: int = 0):
 @app.post("/api/court/{session_id}/decree")
 def court_decree(session_id: str, req: DecreeReq):
     return _court(court.decree, session_id, req.kind, req.lean_delta, req.text)
+
+
+@app.post("/api/court/{session_id}/mind")
+def court_mind(session_id: str, req: MindReq):
+    """用户改心事：追加一行 source=user。它排在拾荒那行后面，所以立刻生效，
+    而且拾荒下次重新整理时改不动它（court.read_user 里由代码钉死）。"""
+    store.add_user_read(session_id, "user", req.model_dump())
+    return _court(court.snapshot, session_id)
 
 
 @app.post("/api/court/{session_id}/verdict")
