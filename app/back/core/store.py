@@ -206,6 +206,15 @@ def user_read() -> dict[str, dict]:
     return out
 
 
+def user_read_rows(session_id: str | None = None) -> list[dict]:
+    """原始档案行，按写入顺序。打指标要看「每一次整理」，不是合并后的结果。"""
+    with conn() as c:
+        if session_id is None:
+            return _rows(c.execute("SELECT * FROM user_read ORDER BY id"))
+        return _rows(c.execute(
+            "SELECT * FROM user_read WHERE session_id=? ORDER BY id", (session_id,)))
+
+
 # ---------- LLM 轨迹 ----------
 
 def add_trace(op: str, model: str, *, session_id: str | None = None, turn_id: int | None = None,

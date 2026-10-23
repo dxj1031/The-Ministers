@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .core import store
+from .evaluation import scorers
 from .services import court
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -42,7 +43,12 @@ def health():
 
 @app.get("/api/stats")
 def stats():
-    return store.stats()
+    # 档案指标和评估用的是同一个 score_user_read —— 同一个判据算两遍，迟早算出两个答案。
+    # 监控台这边喂全部朝会，所以 churn 在这里才有数：固定议题集每个 case 只递一份奏章。
+    rows = store.user_read_rows()
+    out = store.stats()
+    out["archive"] = dict(scorers.score_user_read(rows), rows=len(rows))
+    return out
 
 
 @app.get("/api/sessions")

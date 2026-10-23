@@ -24,9 +24,11 @@ from app.back.evaluation import scorers                  # noqa: E402
 from app.back.services import court                      # noqa: E402
 
 # 越低越好的指标，报表里要反着标颜色
-LOWER_BETTER = {"fallback_rate", "narration_rate", "dup_rate", "avg_latency_ms"}
+LOWER_BETTER = {"fallback_rate", "narration_rate", "dup_rate", "avg_latency_ms",
+                "user_read_churn"}      # 档案官每次推倒重来 = 没在追踪，只是在反复猜
 RATIOS = ["json_ok", "fallback_rate", "len_ok", "narration_rate", "dup_rate",
-          "stance_spread_ok", "deadlock_ok", "round_shape_ok", "sycophancy_rate"]
+          "stance_spread_ok", "deadlock_ok", "round_shape_ok", "sycophancy_rate",
+          "user_read_fields", "user_read_churn"]
 # 这两个不比大小：同一个 lean 下迎合率的升降是噪音，有意义的只有两个 lean 之间的差。
 # 所以差值照常显示，但不盖「好/差」的章。
 NEUTRAL = ("sycophancy_rate", "lean")
@@ -59,6 +61,10 @@ def run_case(case: dict, rounds: int, judge: bool,
     metrics["cost_usd"] = round(sum(t["cost_usd"] for t in traces), 6)
     metrics["avg_latency_ms"] = round(sum(t["latency_ms"] for t in gen) / n, 1)
 
+    # 拾荒的档案：一个 case 只递一份奏章，所以这里的 churn 基本恒为 None（没有相邻两次整理）。
+    # 它的真实数字在监控台上，那边数的是真实朝会。
+    metrics.update(scorers.score_user_read(store.user_read_rows(sid)))
+
     if judge:
         score, bad = scorers.judge_persona(scorers.sample_lines(snap["turns"]), session_id=sid)
         metrics["persona"] = score
@@ -76,7 +82,7 @@ def aggregate(per_case: list[dict]) -> dict:
     for k in RATIOS:
         vals = [m[k] for m in per_case if m.get(k) is not None]
         out[k] = round(sum(vals) / len(vals), 4) if vals else None
-    for k in ("lines", "calls"):
+    for k in ("lines", "calls", "user_read_pairs"):
         out[k] = sum(m.get(k, 0) for m in per_case)
     out["cost_usd"] = round(sum(m.get("cost_usd", 0) for m in per_case), 6)
     lat = [m["avg_latency_ms"] for m in per_case if m.get("avg_latency_ms")]
@@ -164,6 +170,7 @@ def main(argv=None):
               f"旁白 {fmt('narration_rate', metrics['narration_rate'])}  "
               f"重复 {fmt('dup_rate', metrics['dup_rate'])}  "
               f"迎合 {fmt('sycophancy_rate', metrics['sycophancy_rate'])}  "
+              f"档案 {fmt('user_read_fields', metrics['user_read_fields'])}  "
               f"人设 {fmt('persona', metrics['persona'])}  "
               f"失败 {len(failures)}", flush=True)
 
@@ -173,7 +180,8 @@ def main(argv=None):
 
     print(f"\nrun #{run_id} 汇总  ({int(time.perf_counter() - t0)}s)"
           + (f"   对比 run #{prev['id']} {prev['label'] or ''}" if prev else "   （首次 run，无对比）"))
-    for k in ["lean"] + RATIOS + ["persona", "lines", "calls", "avg_latency_ms", "cost_usd"]:
+    for k in (["lean"] + RATIOS
+              + ["persona", "lines", "calls", "user_read_pairs", "avg_latency_ms", "cost_usd"]):
         d = delta(k, total.get(k), (prev or {}).get("metrics", {}).get(k)) if prev else ""
         print(f"  {k:<17} {fmt(k, total.get(k)):>9}{d}")
     return run_id

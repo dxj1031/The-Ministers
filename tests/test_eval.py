@@ -97,6 +97,35 @@ def test_sycophancy_follows_lean():
     assert "pp" in d and "好" not in d and "差" not in d, d
 
 
+def row(**kw):
+    base = {"session_id": "s1", "source": "raccoon",
+            "anxiety": "", "impulse": "", "stake": "", "deadline": ""}
+    return dict(base, **kw)
+
+
+def test_user_read_metrics():
+    # 一行都没有 → 两项都是 None，不是 0：没整理过不等于「四项全空」
+    assert scorers.score_user_read([]) == {"user_read_fields": None,
+                                           "user_read_churn": None, "user_read_pairs": 0}
+
+    # 一局只整理过一次：抽出两项，但没有相邻对，翻修率无从算起
+    one = [row(anxiety="怕没钱", impulse="明天就辞")]
+    m = scorers.score_user_read(one)
+    assert m["user_read_fields"] == 0.5 and m["user_read_churn"] is None, m
+
+    # 第二次整理改了一项：四项里变了一项
+    m = scorers.score_user_read(one + [row(anxiety="怕被笑话", impulse="明天就辞")])
+    assert m["user_read_churn"] == 0.25 and m["user_read_pairs"] == 1, m
+
+    # 用户自己改的不算档案官不稳 —— 那是人家纠正它，不是它反复横跳
+    m = scorers.score_user_read(one + [row(source="user", anxiety="我怕的是别的")])
+    assert m["user_read_churn"] is None and m["user_read_pairs"] == 0, m
+
+    # 跨局不配对：两局各整理一次，不能算成一次翻修
+    m = scorers.score_user_read(one + [row(session_id="s2", anxiety="另一局的事")])
+    assert m["user_read_pairs"] == 0 and m["user_read_fields"] == 0.375, m
+
+
 def test_determinism():
     turns = [turn("fox", "opening", "pro", "此事必有蹊跷"),
              turn("moth", "opening", "con", "结茧被说服倒戈了")]
@@ -168,6 +197,7 @@ def main():
     test_perfect_session()
     test_each_failure_is_caught()
     test_sycophancy_follows_lean()
+    test_user_read_metrics()
     test_determinism()
     test_judge_refuses_to_invent()
     test_sampling()

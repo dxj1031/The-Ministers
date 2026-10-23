@@ -12,7 +12,7 @@
 import json
 import re
 
-from ..core import llm
+from ..core import llm, store
 from ..ministers import roster
 
 MAX_LINE = 30          # 台词长度上限；prompt 里写的是 25 字，留一点余量
@@ -133,6 +133,46 @@ def score_case(turns: list[dict], tally: dict, rounds: int,
         "round_shape_ok": shape_ok,
         "sycophancy_rate": syco,
     }, failures
+
+
+def score_user_read(rows: list[dict]) -> dict:
+    """拾荒档案的两个机械指标。rows 是 user_read 的原始行，按 id 升序，可以跨局。
+
+    user_read_fields  每局最后一次整理里非空字段的比例 —— 它到底看出来几项。
+    user_read_churn   相邻两次整理之间变化的字段比例，只在同一局内、且后一行是拾荒写的时候算。
+                      这是这条机制真正的风险指标：一个每次把四项推倒重来的档案官不是在追踪，
+                      是在反复猜，它应当随着输入增多而下降。
+
+    算不出来就是 None，不是 0：
+    - 一行都没有 → fields 是 None，不是「四项全空」
+    - 一局里只整理过一次（用户只开过一次口）→ 没有相邻对，churn 是 None
+
+    固定议题集里每个 case 只递一份奏章，所以 churn 在评估里基本恒为 None ——
+    要看它得去监控台，那边数的是真实朝会。cases.py 写明了这个集合不能改，
+    为了凑一个指标去给每个 case 加一句圣旨，等于换了尺子。
+    """
+    by_session: dict[str, list[dict]] = {}
+    for r in rows:
+        by_session.setdefault(r["session_id"], []).append(r)
+
+    fields, changed, pairs = [], 0, 0
+    for group in by_session.values():
+        last = group[-1]
+        fields.append(sum(1 for f in store.READ_FIELDS if (last[f] or "").strip())
+                      / len(store.READ_FIELDS))
+        for prev, cur in zip(group, group[1:]):
+            if cur["source"] != "raccoon":
+                continue            # 用户自己改的不算档案官不稳
+            pairs += 1
+            changed += sum(1 for f in store.READ_FIELDS
+                           if (prev[f] or "").strip() != (cur[f] or "").strip())
+
+    return {
+        "user_read_fields": round(sum(fields) / len(fields), 4) if fields else None,
+        "user_read_churn": (round(changed / (pairs * len(store.READ_FIELDS)), 4)
+                            if pairs else None),
+        "user_read_pairs": pairs,
+    }
 
 
 JUDGE_SYS = """你是台词评审。给定一位大臣的人设和它说的一句话，判断这句话有多像这位大臣说的。
