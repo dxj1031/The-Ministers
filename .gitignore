@@ -4,3 +4,11 @@ __pycache__/
 *.pyc
 graphify-out/
 .claude/
+
+# 本地学习资料，不公开
+docs/learning/
+docs/ai_engineering_runbook.md
+docs/evidence/
+.obsidian/
+.claudian/
+tools/obsidian/
