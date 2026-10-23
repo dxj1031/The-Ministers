@@ -178,6 +178,15 @@ def current_stances(session_id: str) -> dict[str, dict]:
     return {r["minister"]: r for r in rows}
 
 
+def note_counts() -> list[dict]:
+    """跨局统计：皇帝的御笔批注各收藏了谁。按条数降序。"""
+    with conn() as c:
+        return _rows(c.execute(
+            """SELECT target AS minister, COUNT(*) AS n FROM turn
+                WHERE kind='note' AND target IS NOT NULL AND target <> ''
+                GROUP BY target ORDER BY n DESC, target"""))
+
+
 # ---------- 拾荒的用户档案 ----------
 
 READ_FIELDS = ("anxiety", "impulse", "stake", "deadline")

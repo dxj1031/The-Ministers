@@ -17,6 +17,44 @@ from app.back.ministers import roster  # noqa: E402
 from app.back.services import court  # noqa: E402
 
 
+def test_notes_and_favorite():
+    """御笔批注落 turn 表，攒够了才算一条跨局模式。"""
+    s = court.open_court("三十岁去读博是勇敢还是逃避", "读完三十五岁")
+    before = len(s["turns"])
+    s = court.add_note(s["id"], "fox", "此事必有蹊跷")
+
+    # 记成皇帝的一行，target 指向被收藏的大臣 —— 所以它不会被当成一次发言
+    note = s["turns"][-1]
+    assert (note["minister"], note["kind"], note["target"]) == ("emperor", "note", "fox"), note
+    assert len(s["turns"]) == before + 1
+    assert sum(s["tally"].values()) == 11, "批注不该改票数"
+
+    # 不存在的大臣收不了
+    try:
+        court.add_note(s["id"], "不存在", "x")
+        raise AssertionError("应该拒绝名册外的大臣")
+    except ValueError:
+        pass
+
+    # 一两条是巧合，不是倾向
+    assert court._favorite() is None, "少于 3 条批注不该报模式"
+    court.add_note(s["id"], "fox", "最坏的情况你想过没有")
+    court.add_note(s["id"], "rabbit", "现在就办")
+    fav = court._favorite()
+    assert fav == {"minister": "fox", "n": 2, "total": 3, "share": 0.6667}, fav
+
+    # 裁决之后它出现在朝堂镜里
+    s = court.verdict(s["id"], "shelve")
+    assert s["mirror"]["favorite"] == fav
+
+    # 批注不进评估：score_case 只数大臣的发言，批注是皇帝那一行
+    from app.back.evaluation import scorers
+    assert any(t["kind"] == "note" for t in s["turns"]), "这一局本来就该有批注"
+    m, _ = scorers.score_case(s["turns"], s["tally"], s["round"])
+    assert m["lines"] == len([t for t in s["turns"]
+                              if t["minister"] not in ("emperor", roster.PARROT)]), m
+
+
 def test_dismiss_echo():
     """罢免应声：朝堂少一个声音，但没有人再顺着你。"""
     s = court.open_court("要不要辞职去开一家猫咖", "存款够撑 8 个月", lean_open=0.5)
@@ -210,6 +248,7 @@ def main():
     test_user_read_is_pinned_and_targeted()
     test_mirror_and_confirm_rate()
     test_dismiss_echo()
+    test_notes_and_favorite()
     test_lean_does_not_reach_debaters()   # 要多开三局，放在 sessions 断言之后
     print_ok(s, st)
 

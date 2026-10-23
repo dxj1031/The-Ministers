@@ -89,6 +89,12 @@ class VerdictReq(BaseModel):
     choice: str
 
 
+class NoteReq(BaseModel):
+    """御笔批注：皇帝把某位大臣的一句话收起来。"""
+    minister: str
+    text: str = Field(default="", max_length=200)
+
+
 class MindReq(BaseModel):
     """用户亲手改的心事。四项都给，留空表示这一项不是用户定的。"""
     anxiety: str = Field(default="", max_length=60)
@@ -163,6 +169,16 @@ def court_stream(session_id: str, after: int = 0):
 @app.post("/api/court/{session_id}/decree")
 def court_decree(session_id: str, req: DecreeReq):
     return _court(court.decree, session_id, req.kind, req.lean_delta, req.text)
+
+
+@app.post("/api/court/{session_id}/note")
+def court_note(session_id: str, req: NoteReq):
+    try:
+        return court.add_note(session_id, req.minister, req.text)
+    except KeyError:
+        raise HTTPException(404, "no such session")
+    except ValueError:
+        raise HTTPException(400, "no such minister")
 
 
 @app.post("/api/court/{session_id}/mind")

@@ -411,6 +411,7 @@ def _mirror(s: dict, stances: dict) -> dict | None:
         "pushed": pushed,
         "ignored": _remonstrance(s["verdict"], stances, s["turns"]),
         "confirm": store.confirm_rate(),
+        "favorite": _favorite(),
         "lean_open": s["lean_open"],
         "aligned": s["verdict_aligned"],
     }
@@ -447,6 +448,42 @@ def verdict(session_id: str, choice: str) -> dict:
                    (edict if isinstance(edict, str) and edict.strip() else fb["edict"]).strip())
     store.end_session(session_id, choice, _aligned(s["lean_open"], choice))
     return snapshot(session_id)
+
+
+# ---------- 御笔批注 ----------
+
+MIN_NOTES_FOR_PATTERN = 3
+
+
+def add_note(session_id: str, minister: str, text: str) -> dict:
+    """皇帝把某位大臣的一句话收进御笔批注。
+
+    落 turn 表而不是浏览器：批注的价值在跨局 —— 攒够了才看得出「你总是收藏谁」。
+    记成皇帝的一行（minister="emperor"、target=那位大臣），所以它不会进评估的分母，
+    也不会被当成一次发言算进回合。
+    """
+    if store.get_session(session_id) is None:
+        raise KeyError(session_id)
+    if minister not in roster.ROSTER:
+        raise ValueError(minister)
+    store.add_turn(session_id, "emperor", "note", "undecided",
+                   text.strip()[:200], influence=0.0, target=minister)
+    return snapshot(session_id)
+
+
+def _favorite() -> dict | None:
+    """跨局模式：你总是收藏谁的发言。
+
+    少于 3 条批注不算模式 —— 一两条是巧合，不是倾向，这时返回 None。
+    空就显示空，不编造：这条和确认率一样，第一次用的时候它本来就该是空的。
+    """
+    rows = store.note_counts()
+    total = sum(r["n"] for r in rows)
+    if total < MIN_NOTES_FOR_PATTERN:
+        return None
+    top = rows[0]
+    return {"minister": top["minister"], "n": top["n"], "total": total,
+            "share": round(top["n"] / total, 4)}
 
 
 # ---------- 快照：前端和监控台都读这个形状 ----------
