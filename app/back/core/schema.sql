@@ -111,3 +111,21 @@ CREATE TABLE IF NOT EXISTS eval_case (
 );
 
 CREATE INDEX IF NOT EXISTS idx_evalcase_run ON eval_case (run_id);
+
+
+-- ---------- 拾荒的用户档案 ----------
+-- 用户状态不是一次抽取，是攒出来的：拾荒每次重新整理就追加一行，读的时候按字段取最新。
+-- 追加不覆盖，有两个理由：档案官的人设就是不许销毁；而且这条读数怎么变的，
+-- 本身是「第三方视角」要用的材料（你第一次说怕没钱，第三次说怕丢脸）。
+CREATE TABLE IF NOT EXISTS user_read (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id  TEXT REFERENCES court_session(id),  -- 在哪一局整理的；读取跨局，不按它过滤
+  source      TEXT NOT NULL,                      -- raccoon | user
+  anxiety     TEXT NOT NULL DEFAULT '',           -- 怕失去什么
+  impulse     TEXT NOT NULL DEFAULT '',           -- 想立刻做什么
+  stake       TEXT NOT NULL DEFAULT '',           -- 赌上的是什么
+  deadline    TEXT NOT NULL DEFAULT '',           -- 真实的时间压力
+  created_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_userread_new ON user_read (id DESC);

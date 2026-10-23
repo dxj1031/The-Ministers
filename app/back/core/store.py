@@ -135,6 +135,41 @@ def current_stances(session_id: str) -> dict[str, dict]:
     return {r["minister"]: r for r in rows}
 
 
+# ---------- 拾荒的用户档案 ----------
+
+READ_FIELDS = ("anxiety", "impulse", "stake", "deadline")
+
+
+def add_user_read(session_id: str | None, source: str, fields: dict) -> None:
+    """追加一次整理。source: raccoon（拾荒整理的）| user（用户自己改的）。"""
+    vals = {f: (fields.get(f) or "").strip() for f in READ_FIELDS}
+    with conn() as c:
+        c.execute(
+            "INSERT INTO user_read (session_id, source, anxiety, impulse, stake, deadline, created_at)"
+            " VALUES (?,?,?,?,?,?,?)",
+            (session_id, source, vals["anxiety"], vals["impulse"],
+             vals["stake"], vals["deadline"], now()),
+        )
+
+
+def user_read() -> dict[str, dict]:
+    """当前这份档案：每个字段各自取最新一条非空的，连同它是谁写的。
+
+    按字段合并而不是整行取最新 —— 用户只改了「怕什么」，不该把拾荒整理的另外三项抹掉。
+    空字符串当成「这次没说」，继续往前找：所以清空一个字段不会留下空洞，
+    会露出上一次的答案。想否认一件事，写一句否认，别清空。
+    """
+    with conn() as c:
+        rows = _rows(c.execute(
+            "SELECT * FROM user_read ORDER BY id DESC LIMIT 200"))
+    out: dict[str, dict] = {}
+    for r in rows:
+        for f in READ_FIELDS:
+            if f not in out and (r[f] or "").strip():
+                out[f] = {"text": r[f].strip(), "source": r["source"]}
+    return out
+
+
 # ---------- LLM 轨迹 ----------
 
 def add_trace(op: str, model: str, *, session_id: str | None = None, turn_id: int | None = None,
