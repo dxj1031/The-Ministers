@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS court_session (
   lean        REAL NOT NULL DEFAULT 0,            -- 皇帝倾向 -1..1（朝会进行中，由圣旨改）
   lean_open   REAL NOT NULL DEFAULT 0,            -- 递奏章时就有的倾向，辩论开始前采集，之后不变
   verdict_aligned INTEGER,                        -- 裁决与 lean_open 同向？1/0；NULL = 没裁决，或开场没倾向
+  echo_out    INTEGER NOT NULL DEFAULT 0,        -- 应声被罢免了？罢了就没人再顺着皇帝，判词也换人念
   created_at  TEXT NOT NULL,
   ended_at    TEXT
 );

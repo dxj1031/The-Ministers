@@ -55,6 +55,7 @@ LATE_COLUMNS = {
     "court_session": [
         ("lean_open", "REAL NOT NULL DEFAULT 0"),
         ("verdict_aligned", "INTEGER"),
+        ("echo_out", "INTEGER NOT NULL DEFAULT 0"),
     ],
 }
 
@@ -94,6 +95,12 @@ def create_session(topic: str, context: str = "", lang: str = "zh",
 def set_lean(session_id: str, lean: float) -> None:
     with conn() as c:
         c.execute("UPDATE court_session SET lean=? WHERE id=?", (max(-1.0, min(1.0, lean)), session_id))
+
+
+def dismiss_echo(session_id: str) -> None:
+    """罢免应声。不可逆：赶走谀臣是个要承担后果的决定，不是一个开关。"""
+    with conn() as c:
+        c.execute("UPDATE court_session SET echo_out=1 WHERE id=?", (session_id,))
 
 
 def end_session(session_id: str, verdict: str, aligned: int | None = None) -> None:

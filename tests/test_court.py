@@ -17,6 +17,29 @@ from app.back.ministers import roster  # noqa: E402
 from app.back.services import court  # noqa: E402
 
 
+def test_dismiss_echo():
+    """罢免应声：朝堂少一个声音，但没有人再顺着你。"""
+    s = court.open_court("要不要辞职去开一家猫咖", "存款够撑 8 个月", lean_open=0.5)
+    s = court.decree(s["id"], "silence", lean_delta=0.3)
+    assert len(s["ministers"]) == 12 and s["ministers"][-1]["id"] == roster.PARROT
+    assert s["echo_out"] is False
+
+    s = court.decree(s["id"], "dismiss")
+    assert s["echo_out"] is True
+    assert len(s["ministers"]) == 11, "罢免之后名册里不该还有应声"
+    assert all(m["id"] != roster.PARROT for m in s["ministers"])
+    assert abs(s["lean"] - 0.3) < 1e-9, "罢免不是改主意，不该动 lean"
+    assert sum(s["tally"].values()) == 11, "应声本来就没有票，罢免也不该改票数"
+    assert s["turns"][-1]["kind"] == "decree", "罢免要在朝堂记录里留一行"
+
+    # 判词换人念：没有谀臣了，判词就只是判词
+    s = court.verdict(s["id"], "approve")
+    assert s["turns"][-1]["minister"] == "emperor", s["turns"][-1]
+    assert s["turns"][-1]["kind"] == "verdict"
+    # 谏言不受影响：异议是辩论的一部分，不是谀臣的陪衬
+    assert s["remonstrance"] is not None
+
+
 def test_mirror_and_confirm_rate():
     """朝堂镜三行，以及「裁决是不是照着开场倾向走的」怎么算。"""
     # 开场偏赞成，最后准奏 —— 这就是一次「确认」
@@ -186,6 +209,7 @@ def main():
     malformed_shapes()
     test_user_read_is_pinned_and_targeted()
     test_mirror_and_confirm_rate()
+    test_dismiss_echo()
     test_lean_does_not_reach_debaters()   # 要多开三局，放在 sessions 断言之后
     print_ok(s, st)
 

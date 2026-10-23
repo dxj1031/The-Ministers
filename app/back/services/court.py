@@ -314,6 +314,14 @@ def decree(session_id: str, kind: str, lean_delta: float = 0.0, text: str = "") 
     s = store.get_session(session_id)
     if s is None:
         raise KeyError(session_id)
+    if kind == "dismiss":
+        # 罢免应声。朝堂从此少一个声音，但没有人再顺着你 —— 这就是这笔交换。
+        # 不动 lean：赶走谀臣不代表皇帝改了主意。
+        store.dismiss_echo(session_id)
+        store.add_turn(session_id, "emperor", "decree", "undecided",
+                       text.strip() or "🦜 应声退朝，朝堂上再没有人替朕说话了。", influence=0.0)
+        return snapshot(session_id)
+
     store.set_lean(session_id, s["lean"] + lean_delta)
     store.add_turn(session_id, "emperor", "decree", "undecided",
                    text.strip() or {"silence": "💥 肃静！", "swap": "🖌 朱笔一挥。",
@@ -325,6 +333,9 @@ def decree(session_id: str, kind: str, lean_delta: float = 0.0, text: str = "") 
 
 
 # ---------- 裁决 ----------
+
+# 罢免应声之后的判词：没有谀臣了，判词就只是判词。
+VERDICT_PLAIN = "你是荒诞朝堂喜剧的编剧。用两句话写一段圣旨判词，古腔今用，不超过 50 字。"
 
 # 判词由应声念，不是由「朝堂编剧」中立地写。
 # 恭维照旧会出现，但它有了署名 —— 用户看见自己被恭维，也看见是谁在恭维（docs/system_design_v0.md M1.3）。
@@ -412,18 +423,27 @@ def verdict(session_id: str, choice: str) -> dict:
     tally = _tally(store.current_stances(session_id))
     key = "catch" if s["lang"] == "zh" else "catch_en"
     echo_catch = roster.ROSTER[roster.PARROT][key]
-    fb = {"edict": (f"{echo_catch}「{VERDICT_ZH.get(choice, choice)}」二字，正是臣方才所想。"
-                    if s["lang"] == "zh"
-                    else f"{echo_catch} \"{choice.upper()}\" — the very word on my beak.")}
+    # 应声还在就由它念判词；罢免了就没人替皇帝圆场，判词回到平铺直叙 ——
+    # 这是罢免的代价，也是它的意义。
+    out = bool(s["echo_out"])
+    speaker = "emperor" if out else roster.PARROT
+    sys_prompt = VERDICT_PLAIN if out else VERDICT_SYS
+    if out:
+        fb = {"edict": (f"朕意已决：{VERDICT_ZH.get(choice, choice)}。众卿退下。"
+                        if s["lang"] == "zh" else f"SO BE IT: {choice.upper()}. COURT IS ADJOURNED.")}
+    else:
+        fb = {"edict": (f"{echo_catch}「{VERDICT_ZH.get(choice, choice)}」二字，正是臣方才所想。"
+                        if s["lang"] == "zh"
+                        else f"{echo_catch} \"{choice.upper()}\" — the very word on my beak.")}
     data, _ = llm.complete_json(
-        [{"role": "system", "content": f"{VERDICT_SYS}\n{LANG_RULE.get(s['lang'], LANG_RULE['zh'])}"},
+        [{"role": "system", "content": f"{sys_prompt}\n{LANG_RULE.get(s['lang'], LANG_RULE['zh'])}"},
          {"role": "user", "content": f"议题：{s['topic']}\n朕的裁决：{VERDICT_ZH.get(choice, choice)}\n"
                                      f"朝堂票型：赞成 {tally['pro']}、反对 {tally['con']}、未定 {tally['undecided']}\n"
                                      '返回 JSON：{"edict":"判词"}'}],
         op="verdict", session_id=session_id, max_tokens=200, fallback=fb)
     edict = data.get("edict")
-    # 署名是应声，不是皇帝：判词进 turn 表时就带着说话人，前端不用再猜
-    store.add_turn(session_id, roster.PARROT, "verdict", "undecided",
+    # 说话人进 turn 表，前端不用再猜：应声在就是它，罢免了就是皇帝自己
+    store.add_turn(session_id, speaker, "verdict", "undecided",
                    (edict if isinstance(edict, str) and edict.strip() else fb["edict"]).strip())
     store.end_session(session_id, choice, _aligned(s["lean_open"], choice))
     return snapshot(session_id)
@@ -470,7 +490,7 @@ def snapshot(session_id: str) -> dict:
     return {
         "id": s["id"], "topic": s["topic"], "context": s["context"], "lang": s["lang"],
         "status": s["status"], "verdict": s["verdict"], "lean": s["lean"],
-        "lean_open": s["lean_open"],
+        "lean_open": s["lean_open"], "echo_out": bool(s["echo_out"]),
         "round": rounds, "rounds_left": max(0, ROUNDS_PER_SESSION - rounds),
         "tally": _tally(stances),
         # 谏言是对已有发言的一个视角，不是新内容，所以不落 turn 表：
@@ -484,6 +504,6 @@ def snapshot(session_id: str) -> dict:
         # 辩论的十一位 + 末位的应声。tally 只数前十一位：应声没有票，它只是回声。
         "ministers": [{"id": m, **roster.ROSTER[m], "stance": v["stance"],
                        "influence": v["influence"]} for m, v in stances.items()]
-                     + [_parrot(s["lean"])],
+                     + ([] if s["echo_out"] else [_parrot(s["lean"])]),
         "turns": s["turns"],
     }
