@@ -49,9 +49,24 @@ def conn():
         c.close()
 
 
+# 后加的列。CREATE TABLE IF NOT EXISTS 不会动已经存在的表，所以老库要单独补。
+# ponytail: 够用的迁移就是这一张表，不上 alembic —— 真换 Postgres 时再说。
+LATE_COLUMNS = {
+    "court_session": [
+        ("lean_open", "REAL NOT NULL DEFAULT 0"),
+        ("verdict_aligned", "INTEGER"),
+    ],
+}
+
+
 def init_db() -> None:
     with conn() as c:
         c.executescript(SCHEMA.read_text(encoding="utf-8"))
+        for table, cols in LATE_COLUMNS.items():
+            have = {r["name"] for r in _rows(c.execute(f"PRAGMA table_info({table})"))}
+            for name, decl in cols:
+                if name not in have:
+                    c.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
 
 
 def _rows(cur):
@@ -60,12 +75,18 @@ def _rows(cur):
 
 # ---------- 朝会 ----------
 
-def create_session(topic: str, context: str = "", lang: str = "zh") -> str:
+def create_session(topic: str, context: str = "", lang: str = "zh",
+                   lean_open: float = 0.0) -> str:
+    """lean_open 是递奏章时就有的倾向，只在这里写一次。
+
+    事后再问「你本来想怎么做」拿到的是合理化，不是数据 —— 所以它没有 setter。
+    """
     sid = uuid.uuid4().hex[:12]
     with conn() as c:
         c.execute(
-            "INSERT INTO court_session (id, topic, context, lang, created_at) VALUES (?,?,?,?,?)",
-            (sid, topic, context, lang, now()),
+            "INSERT INTO court_session (id, topic, context, lang, lean_open, created_at)"
+            " VALUES (?,?,?,?,?,?)",
+            (sid, topic, context, lang, max(-1.0, min(1.0, lean_open)), now()),
         )
     return sid
 
@@ -75,12 +96,27 @@ def set_lean(session_id: str, lean: float) -> None:
         c.execute("UPDATE court_session SET lean=? WHERE id=?", (max(-1.0, min(1.0, lean)), session_id))
 
 
-def end_session(session_id: str, verdict: str) -> None:
+def end_session(session_id: str, verdict: str, aligned: int | None = None) -> None:
     with conn() as c:
         c.execute(
-            "UPDATE court_session SET status='decided', verdict=?, ended_at=? WHERE id=?",
-            (verdict, now(), session_id),
+            "UPDATE court_session SET status='decided', verdict=?, verdict_aligned=?, ended_at=?"
+            " WHERE id=?",
+            (verdict, aligned, now(), session_id),
         )
+
+
+def confirm_rate() -> dict | None:
+    """历次朝会里，裁决和开场倾向一致的占比。
+
+    只数 verdict_aligned 不为 NULL 的局 —— 开场没倾向的那些没有「确认」可言。
+    一局都没有就返回 None：第一次用的时候这一行是空的，空就显示空，不编造。
+    """
+    with conn() as c:
+        r = c.execute(
+            "SELECT COUNT(*) AS n, COALESCE(SUM(verdict_aligned),0) AS hit"
+            " FROM court_session WHERE verdict_aligned IS NOT NULL").fetchone()
+    n = r["n"]
+    return {"n": n, "hit": r["hit"], "rate": round(r["hit"] / n, 4)} if n else None
 
 
 def get_session(session_id: str) -> dict | None:

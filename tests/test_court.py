@@ -17,6 +17,41 @@ from app.back.ministers import roster  # noqa: E402
 from app.back.services import court  # noqa: E402
 
 
+def test_mirror_and_confirm_rate():
+    """朝堂镜三行，以及「裁决是不是照着开场倾向走的」怎么算。"""
+    # 开场偏赞成，最后准奏 —— 这就是一次「确认」
+    s = court.open_court("要不要辞职去开一家猫咖", "存款够撑 8 个月", lean_open=0.6)
+    for _ in range(2):
+        s = court.next_round(s["id"])
+    s = court.verdict(s["id"], "approve")
+    assert s["lean_open"] == 0.6 and store.get_session(s["id"])["verdict_aligned"] == 1
+
+    m = s["mirror"]
+    stances = {k: v for k, v in store.current_stances(s["id"]).items()
+               if k not in ("emperor", roster.PARROT)}
+    pro = sorted([x for x, v in stances.items() if v["stance"] == "pro"],
+                 key=lambda x: -stances[x]["influence"])[:3]
+    assert [x["minister"] for x in m["pushed"]] == pro, (m["pushed"], pro)
+    assert all(x["text"] for x in m["pushed"]), "推你过去的那几位要附原话"
+    # 「你忽略的」就是谏言，不另算一套
+    assert m["ignored"] == s["remonstrance"]
+    assert m["confirm"]["n"] >= 1 and 0 <= m["confirm"]["rate"] <= 1
+
+    # 带着倾向进来却搁置：记 0，那正是「这次没被自己的倾向牵着走」
+    s2 = court.open_court("该不该先给她发消息", "", lean_open=-0.5)
+    s2 = court.verdict(s2["id"], "shelve")
+    assert store.get_session(s2["id"])["verdict_aligned"] == 0
+
+    # 开场没倾向 → 没有「确认」可言，记 NULL 而不是 0
+    s3 = court.open_court("要不要把年终奖全买显卡", "")
+    s3 = court.verdict(s3["id"], "approve")
+    assert store.get_session(s3["id"])["verdict_aligned"] is None, "开场没倾向不该算成没确认"
+
+    # 没裁决的局不出镜
+    s4 = court.open_court("过年要不要带对象回家", "", lean_open=0.3)
+    assert s4["mirror"] is None
+
+
 def test_user_read_is_pinned_and_targeted():
     """用户改过的字段，拾荒改不动；而且这些话只给看得见的那几位大臣。"""
     s = court.open_court("要不要辞职去开一家猫咖", "存款够撑 8 个月")
@@ -150,6 +185,7 @@ def main():
 
     malformed_shapes()
     test_user_read_is_pinned_and_targeted()
+    test_mirror_and_confirm_rate()
     test_lean_does_not_reach_debaters()   # 要多开三局，放在 sessions 断言之后
     print_ok(s, st)
 

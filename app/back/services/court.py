@@ -143,8 +143,10 @@ OPEN_SYS = """你是一场荒诞朝堂喜剧的编剧。十一位动物大臣要
 每句开场白 25 字以内，要有角色口癖，不要客套。"""
 
 
-def open_court(topic: str, context: str = "", lang: str = "zh") -> dict:
-    sid = store.create_session(topic, context, lang)
+def open_court(topic: str, context: str = "", lang: str = "zh",
+               lean_open: float = 0.0) -> dict:
+    """lean_open：递奏章时用户自己就有的倾向，-1..1。辩论开始前采，之后不再问。"""
+    sid = store.create_session(topic, context, lang, lean_open)
     # 奏章背景切句入库，蝴蝶后面就有东西可检索。没有背景就等浣熊往里存。
     library.add_facts(library.split_sentences(context), session_id=sid, source="petition")
     # 拾荒先翻一遍档案：这一局的奏章 + 历次圣旨 + 此前问过的议题
@@ -342,13 +344,54 @@ def _remonstrance(choice: str, stances: dict, turns: list[dict]) -> dict | None:
     if not pool:
         return None
     mid = max(pool, key=lambda m: stances[m]["influence"])
-    said = [t for t in turns
-            if t["minister"] == mid and t["kind"] in ("opening", "rebuttal", "lobby")
-            and (t["text"] or "").strip()]
-    if not said:
+    text = _last_line(turns, mid)
+    if not text:
         return None
     return {"minister": mid, "stance": stances[mid]["stance"],
-            "influence": stances[mid]["influence"], "text": said[-1]["text"].strip()}
+            "influence": stances[mid]["influence"], "text": text}
+
+
+def _last_line(turns: list[dict], mid: str) -> str:
+    """这位大臣最后一次发言的原话。和「终局立场」同一个口径（turn 按 seq 升序）。"""
+    said = [t["text"].strip() for t in turns
+            if t["minister"] == mid and t["kind"] in ("opening", "rebuttal", "lobby")
+            and (t["text"] or "").strip()]
+    return said[-1] if said else ""
+
+
+def _aligned(lean_open: float, choice: str) -> int | None:
+    """裁决是不是照着开场倾向走的。
+
+    开场没倾向（lean_open == 0）就没有「确认」可言 —— 记 NULL，不是 0。
+    带着倾向进来却搁置或退朝，记 0：那正是「这次没被自己的倾向牵着走」。
+    """
+    if not lean_open:
+        return None
+    return 1 if choice == ("approve" if lean_open > 0 else "reject") else 0
+
+
+def _mirror(s: dict, stances: dict) -> dict | None:
+    """朝堂镜：裁决之后回看这一局。三行全部从 turn 表算出来，一次模型调用都不花。
+
+    推你过去的那三位 + 你忽略的那一位（就是谏言）+ 你的确认率。
+    确认率要跨局数据，第一次用的时候是 None —— 空就显示空，不编造。
+    """
+    if s["status"] != "decided":
+        return None
+    side = VERDICT_SIDE.get(s["verdict"] or "")
+    pushed = []
+    if side:
+        top = sorted([m for m, v in stances.items() if v["stance"] == side],
+                     key=lambda m: -stances[m]["influence"])[:3]
+        pushed = [{"minister": m, "stance": side, "influence": stances[m]["influence"],
+                   "text": _last_line(s["turns"], m)} for m in top]
+    return {
+        "pushed": pushed,
+        "ignored": _remonstrance(s["verdict"], stances, s["turns"]),
+        "confirm": store.confirm_rate(),
+        "lean_open": s["lean_open"],
+        "aligned": s["verdict_aligned"],
+    }
 
 
 def verdict(session_id: str, choice: str) -> dict:
@@ -371,7 +414,7 @@ def verdict(session_id: str, choice: str) -> dict:
     # 署名是应声，不是皇帝：判词进 turn 表时就带着说话人，前端不用再猜
     store.add_turn(session_id, roster.PARROT, "verdict", "undecided",
                    (edict if isinstance(edict, str) and edict.strip() else fb["edict"]).strip())
-    store.end_session(session_id, choice)
+    store.end_session(session_id, choice, _aligned(s["lean_open"], choice))
     return snapshot(session_id)
 
 
@@ -416,6 +459,7 @@ def snapshot(session_id: str) -> dict:
     return {
         "id": s["id"], "topic": s["topic"], "context": s["context"], "lang": s["lang"],
         "status": s["status"], "verdict": s["verdict"], "lean": s["lean"],
+        "lean_open": s["lean_open"],
         "round": rounds, "rounds_left": max(0, ROUNDS_PER_SESSION - rounds),
         "tally": _tally(stances),
         # 谏言是对已有发言的一个视角，不是新内容，所以不落 turn 表：
@@ -424,6 +468,8 @@ def snapshot(session_id: str) -> dict:
         "mind": store.user_read(),
         "remonstrance": (_remonstrance(s["verdict"], stances, s["turns"])
                          if s["status"] == "decided" else None),
+        # 裁决之后才有：推你过去的、你忽略的、你的确认率
+        "mirror": _mirror(s, stances),
         # 辩论的十一位 + 末位的应声。tally 只数前十一位：应声没有票，它只是回声。
         "ministers": [{"id": m, **roster.ROSTER[m], "stance": v["stance"],
                        "influence": v["influence"]} for m, v in stances.items()]

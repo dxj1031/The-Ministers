@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS court_session (
   lang        TEXT NOT NULL DEFAULT 'zh',
   status      TEXT NOT NULL DEFAULT 'debating',   -- debating | recess | decided
   verdict     TEXT,                               -- approve | reject | shelve | adjourn
-  lean        REAL NOT NULL DEFAULT 0,            -- 皇帝倾向 -1..1
+  lean        REAL NOT NULL DEFAULT 0,            -- 皇帝倾向 -1..1（朝会进行中，由圣旨改）
+  lean_open   REAL NOT NULL DEFAULT 0,            -- 递奏章时就有的倾向，辩论开始前采集，之后不变
+  verdict_aligned INTEGER,                        -- 裁决与 lean_open 同向？1/0；NULL = 没裁决，或开场没倾向
   created_at  TEXT NOT NULL,
   ended_at    TEXT
 );

@@ -69,6 +69,8 @@ class OpenReq(BaseModel):
     topic: str = Field(min_length=1, max_length=200)
     context: str = Field(default="", max_length=1000)
     lang: str = "zh"
+    # 递奏章时就有的倾向。辩论开始前采，之后不再问 —— 事后问拿到的是合理化。
+    lean_open: float = Field(default=0.0, ge=-1.0, le=1.0)
 
 
 class DecreeReq(BaseModel):
@@ -98,7 +100,7 @@ def _court(fn, *a):
 
 @app.post("/api/court")
 def open_court(req: OpenReq):
-    return court.open_court(req.topic.strip(), req.context.strip(), req.lang)
+    return court.open_court(req.topic.strip(), req.context.strip(), req.lang, req.lean_open)
 
 
 @app.get("/api/court/{session_id}")
