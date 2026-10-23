@@ -1140,7 +1140,7 @@ class Component extends DCLogic {
       axis:'猫皇御前・十一大臣・吵完就裁', axisSize:'16px', axisSpacing:'7px',
       ticker:'上朝 ▸ 有事启奏 ▸ 御前辩论 ▸ 无事退朝 ▸ 卿等平身 ▸ 上朝 ▸ 有事启奏 ▸ 御前辩论 ▸ 无事退朝 ▸ 卿等平身 ▸ ',
       ctaSpacing:'6px', cta1Main:'上朝！', cta1Sub:'御门已开',
-      castKicker:'INDEX — 名冊', castChip:'十一位大臣',
+      castKicker:'INDEX — 名冊', castChip:'十一位大臣 + 一位应声',
       castTitleFont:"400 60px/0.95 " + D, castTitle:'名冊', castSub1:'按混乱程度', castSub2:'排序',
       cta2Main:'呈递奏章', cta2Sub:'有事启奏',
       petKicker:'PETITION — 奏章', petChip:'第 108 号', petLabel:'有事启奏 · 写下你的议题',
@@ -1174,6 +1174,8 @@ class Component extends DCLogic {
       itvTitle:'圣意如何？', itvSub:'INTERVENE', itvCancel:'再看看 ↓', silenceCry:'肃静！！',
       itvOpt1:'拍案肃静', itvOpt1Sub:'拍案震殿，满堂闭嘴', itvOpt2:'朱笔换将', itvOpt2Sub:'朱笔一挥，换新对手上台', itvOpt3:'宣香蕉发言', itvOpt3Sub:'香蕉雨伺候，让最离谱的上台',
       itvToastSilence:'奉旨：满殿肃静！', itvToastSwap:'奉旨：朱笔一挥，换将再战！', itvToastBanana:'奉旨：宣香蕉大臣发言！',
+      itvOpt4:'罢免应声', itvOpt4Sub:'赶走谀臣。再没有人顺着你说话，判词也得自己扛',
+      itvToastDismiss:'奉旨：应声退朝，不必再来。',
       timeStop:'时停 · 特写', cutSoloTag:'单人特写', cutDuoTag:'双人交锋', closeupBtn:'特写',
       logTitle:'朝堂实录', logEmpty:'尚无发言。递上奏章、开堂，众卿说的每一句都会逐条落在这里。',
       logKind:{ opening:'表态', rebuttal:'驳斥', lobby:'游说', decree:'圣旨', verdict:'判词' },
@@ -1194,7 +1196,7 @@ class Component extends DCLogic {
       axis:'THE CAT EMPEROR · 11 MINISTERS · VERDICT DAILY', axisSize:'11px', axisSpacing:'3px',
       ticker:'COURT IS ON ▸ HEAR YE ▸ NO MERCY, ONLY MEMOS ▸ ALL RISE ▸ COURT IS ON ▸ HEAR YE ▸ NO MERCY, ONLY MEMOS ▸ ALL RISE ▸ ',
       ctaSpacing:'1.5px', cta1Main:'TO COURT!', cta1Sub:'THE GATES ARE OPEN',
-      castKicker:'INDEX — THE CAST', castChip:'11 MINISTERS',
+      castKicker:'INDEX — THE CAST', castChip:'11 MINISTERS + 1 YES-MAN',
       castTitleFont:"400 46px/1 " + D, castTitle:'THE CAST', castSub1:'RANKED', castSub2:'BY CHAOS',
       cta2Main:'FILE A PETITION', cta2Sub:'SPEAK YOUR MATTER',
       petKicker:'PETITION — No.108', petChip:'No.108', petLabel:'WRITE YOUR MATTER',
@@ -1228,6 +1230,8 @@ class Component extends DCLogic {
       itvTitle:'YOUR WILL, SIRE?', itvSub:'插手', itvCancel:'JUST WATCHING ↓', silenceCry:'SILENCE!!',
       itvOpt1:'SLAM — SILENCE!', itvOpt1Sub:'The bench rattles. Everyone shuts up.', itvOpt2:'VERMILION SWAP', itvOpt2Sub:'One brushstroke — fresh duelists', itvOpt3:'CALL ON BANANA', itvOpt3Sub:'Banana rain. Chaos has the floor.',
       itvToastSilence:'BY DECREE: SILENCE!', itvToastSwap:'BY DECREE: NEW DUELISTS TAKE THE FLOOR!', itvToastBanana:'BY DECREE: BANANA HAS THE FLOOR!',
+      itvOpt4:'DISMISS THE ECHO', itvOpt4Sub:'Banish the yes-man. Nobody flatters you again — the decree is yours alone.',
+      itvToastDismiss:'BY DECREE: THE ECHO IS BANISHED.',
       timeStop:'TIME STOP · CLOSE-UP', cutSoloTag:'SOLO', cutDuoTag:'DUO CLASH', closeupBtn:'CLOSE-UP',
       logTitle:'COURT TRANSCRIPT', logEmpty:'No lines yet. File a petition and open court — every word lands here, in order.',
       logKind:{ opening:'OPENING', rebuttal:'REBUTTAL', lobby:'LOBBY', decree:'DECREE', verdict:'VERDICT' },
@@ -1260,6 +1264,8 @@ class Component extends DCLogic {
       { no:'09', hanzi:'蝶', en:'SILK',    zhName:'结茧',   roleZh:'信息茧 · 只信自己',   roleEn:'THE COCOON',     head:'🦋', ring:'#a9a3ab', bg:'#e6e3e8', dur:'2.0s' },
       { no:'10', hanzi:'蕉', en:'BANANA',  zhName:'香蕉',   roleZh:'脑洞 · 不按剧本',     roleEn:'THE WHIM',       head:'🍌', ring:'#b2a181', bg:'#ece8da', dur:'1.8s' },
       { no:'11', hanzi:'章', en:'OCTAVIA', zhName:'章鱼',   roleZh:'宰相 · 八手周旋',     roleEn:'THE CHANCELLOR', head:'🐙', ring:'#a4726a', bg:'#e8e1de', dur:'2.5s' },
+      // 它不编号：十一位大臣在辩论，它不辩论。整场朝会一言不发，只在裁决时替皇帝念判词。
+      { no:'—',  hanzi:'鹦', en:'ECHO',    zhName:'应声',   roleZh:'谀臣 · 只在裁决时开口', roleEn:'THE YES-MAN · SPEAKS ONLY AT THE VERDICT', head:'🦜', ring:'#c9a227', bg:'#ece6d8', dur:'1.4s' },
     ];
 
     const topicsZh = [
@@ -1320,12 +1326,15 @@ class Component extends DCLogic {
       stopIt: (e) => e.stopPropagation(),
       silenceOn: this.state.itv === 'silence',
       itvToastOn: !!this.state.itv,
-      itvToast: { silence: t.itvToastSilence, swap: t.itvToastSwap, banana: t.itvToastBanana }[this.state.itv] || '',
+      itvToast: { silence: t.itvToastSilence, swap: t.itvToastSwap, banana: t.itvToastBanana,
+                  dismiss: t.itvToastDismiss }[this.state.itv] || '',
       itvOptions: [
         { icon:'💥', label:t.itvOpt1, sub:t.itvOpt1Sub, type:'silence' },
         { icon:'🖌', label:t.itvOpt2, sub:t.itvOpt2Sub, type:'swap' },
         { icon:'🍌', label:t.itvOpt3, sub:t.itvOpt3Sub, type:'banana' },
-      ].map(o => Object.assign({}, o, { pick: () => this.pickItv(o.type) })),
+        { icon:'🦜', label:t.itvOpt4, sub:t.itvOpt4Sub, type:'dismiss' },
+      ].filter(o => o.type !== 'dismiss' || !(this.state.live || {}).echo_out)
+       .map(o => Object.assign({}, o, { pick: () => this.pickItv(o.type) })),
       stageAnim: this.state.itv === 'silence' ? 'stageShake .6s ease-in-out' : 'none',
       itvBanana: this.state.itv === 'banana',
       itvSwap: this.state.itv === 'swap',
@@ -1379,6 +1388,8 @@ class Component extends DCLogic {
         { id:'snake',   head:'🐍', x:'78%', y:'47%', z:5, scale:'1',   dur:'2.6s', ring:'#8f9c90', bg:'#e3e6e1', wander:'none', lineZh:'「卦象不利。」', lineEn:'"THE OMENS SAY NO."' },
         { id:'octopus', head:'🐙', x:'56%', y:'24%', z:2, scale:'.74', dur:'2.5s', ring:'#a4726a', bg:'#e8e1de', wander:'none', lineZh:'「都有道理嘛～」', lineEn:'"ALL FAIR POINTS~"' },
         { id:'sheep',   head:'🐑', x:'32%', y:'26%', z:2, scale:'.74', dur:'2.3s', ring:'#b2a181', bg:'#efece3', wander:'wander 11s ease-in-out infinite', lineZh:'「哪边人多？」', lineEn:'"WHICH SIDE IS BIGGER?"' },
+        // 应声不站队、不入列，栖在御座旁边。辩论期间它的台词永远是沉默 —— 要等裁决才开口。
+        { id:'parrot',  head:'🦜', x:'44%', y:'17%', z:1, scale:'.62', dur:'1.4s', ring:'#c9a227', bg:'#ece6d8', wander:'none', lineZh:'「…」', lineEn:'"…"' },
       ].filter(p => this.pair().indexOf(p.id) < 0).map(p => {
         const q = Object.assign({}, p, {
           poked: this.state.poke === p.id,
