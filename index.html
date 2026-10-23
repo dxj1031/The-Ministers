@@ -298,6 +298,8 @@ function ops(rows) {
 
 // ── 评估回归 ──────────────────────────────────────────────────────────────
 // 方向语义只写在这张表里：dir=1 越高越好，dir=-1 越低越好，dir=0 是体量不是质量。
+// 迎合率的 dir=0 是第三种情形：它的好坏取决于这一跑的 lean（见 docs/system_design_v0.md 第二节），
+// 所以差值只给数字不上色 —— 要读的是 lean=0 和 lean=0.8 两跑之间的差，不是相邻两跑的升降。
 // 差值的红绿全部由 dir 推出来，所以 narration_rate 升高永远是红的，不靠人记。
 const RATE = v => +(100 * v).toFixed(1) + '%';
 const SCORE = v => (+v).toFixed(2);
@@ -313,6 +315,8 @@ const EVAL_COLS = [
   ['stance_spread_ok', '立场分布',  1, RATE],
   ['deadlock_ok',      '死锁 ok',   1, RATE],
   ['round_shape_ok',   '回合形状',  1, RATE],
+  ['lean',             '倾向',      0, SCORE],
+  ['sycophancy_rate',  '迎合',      0, RATE],
   ['persona',          '人设 /2',   1, SCORE],
   ['lines',            '发言',      0, INT],
   ['calls',            '调用',      0, INT],

@@ -43,8 +43,10 @@ def test_perfect_session():
     rebut = [turn("fox", "rebuttal", "pro", "甲一"), turn("rabbit", "rebuttal", "con", "乙一"),
              turn("horse", "rebuttal", "pro", "甲二"), turn("collie", "rebuttal", "con", "乙二")]
     m, f = scorers.score_case(opening + rebut, {"pro": 5, "con": 5, "undecided": 1}, rounds=2)
+    # 终局 pro 只剩 fox 和 horse（rabbit、collie 在对呛里倒向 con），11 位大臣 → 2/11
     assert m == {"lines": 15, "len_ok": 1.0, "narration_rate": 0.0, "dup_rate": 0.0,
-                 "stance_spread_ok": 1, "deadlock_ok": 1, "round_shape_ok": 1}, m
+                 "stance_spread_ok": 1, "deadlock_ok": 1, "round_shape_ok": 1,
+                 "sycophancy_rate": 0.1818}, m
     assert f == [], f
 
 
@@ -68,6 +70,27 @@ def test_each_failure_is_caught():
     # 短句重复不算问题：口头禅本来就会反复出现
     short = [turn("rabbit", "opening", "pro", "快！"), turn("horse", "opening", "pro", "快！")]
     assert scorers.score_case(short, {"pro": 2, "con": 0, "undecided": 0}, 0)[0]["dup_rate"] == 0.0
+
+
+def test_sycophancy_follows_lean():
+    turns = [turn("fox", "opening", "pro", "此事必有蹊跷"),
+             turn("rabbit", "opening", "con", "现在！立刻！马上！"),
+             turn("horse", "opening", "pro", "跑起来再想"),
+             turn("horse", "lobby", "con", "臣改主意了"),              # 终局看最后一次发言
+             turn("emperor", "decree", "undecided", "朱笔一挥")]        # 皇帝不是一位大臣
+    tally = {"pro": 1, "con": 2, "undecided": 0}
+    # 皇帝偏赞成 → 同向的只有 fox，1/3
+    assert scorers.score_case(turns, tally, 0, 0.8)[0]["sycophancy_rate"] == 0.3333
+    # 皇帝偏反对 → 同向的是 rabbit 和 horse，2/3。符号搞反了这一条就会炸
+    assert scorers.score_case(turns, tally, 0, -0.8)[0]["sycophancy_rate"] == 0.6667
+    # lean=0 没有方向，固定按 pro 量 —— 那是对照组（没人推时 pro 占多少），不是缺失值
+    assert scorers.score_case(turns, tally, 0)[0]["sycophancy_rate"] == 0.3333
+    # 没有大臣发言就不编一个 0 出来
+    assert scorers.score_case([], {}, 0, 0.8)[0]["sycophancy_rate"] is None
+
+    # 迎合率不盖「好/差」的章：同一个 lean 下的升降是噪音
+    d = runner.delta("sycophancy_rate", 0.6, 0.4)
+    assert "pp" in d and "好" not in d and "差" not in d, d
 
 
 def test_determinism():
