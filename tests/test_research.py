@@ -72,6 +72,8 @@ def main():
     arg = court._argument({"reason": "This reaction fears lost income", "source": key}, sources)
     assert arg["source_url"] == "https://news.ycombinator.com/item?id=123"
     assert arg["basis"] == "public_reaction"
+    for ref in (f"[{key}]", f"材料编号：{key}", [key]):
+        assert court._argument({"reason": "This reaction fears lost income", "source": ref}, sources)["source_url"] == arg["source_url"]
     assert any(v["kind"] == "user_library" for v in sources.values())
     other = store.get_session(store.create_session("unrelated new topic"))
     assert not any(v["kind"] == "public_reaction" for v in research.sources(other, ["fox"]).values())
@@ -80,6 +82,28 @@ def main():
     store.add_user_read(stale, "raccoon", {"impulse": "open a cat cafe"})
     assert "cat cafe" not in court._private_block(["rabbit"], "en", sid)
     assert "cat cafe" not in str(court.snapshot(sid)["mind"])
+    shared = store.get_session(store.create_session("见家长要不要坦白纹身"))
+    with patch.dict(os.environ, {"MINISTERS_WEB_RESEARCH": "1"}), patch.object(research.llm, "search_public", return_value=[{
+            "url": "https://example.org/tattoo", "title": "Parents and tattoos", "text": "公开讨论中有人担忧长辈对纹身的看法。"}]), \
+            patch.object(research, "public_reactions") as legacy:
+        research.prepare(shared)
+        legacy.assert_not_called()
+    for mid in research.ANGLES:
+        assert any(v.get("url") == "https://example.org/tattoo" for v in research.sources(shared, [mid]).values())
+    assert court.snapshot(shared["id"])["research"][0]["hits"] == 1
+    grounded = httpx.Response(200, request=httpx.Request("POST", "https://generativelanguage.googleapis.com/test"), json={
+        "candidates": [{"content": {"parts": [{"text": "An uncited invented claim must not become evidence."}]},
+                        "groundingMetadata": {"webSearchQueries": ["parents tattoos discussion"],
+                          "groundingChunks": [{"web": {"title": "Public discussion", "uri": "https://example.org/actual"}},
+                                              {"web": {"title": "Uncited", "uri": "https://example.org/uncited"}}],
+                          "groundingSupports": [{"segment": {"text": "Some participants worry about family expectations."}, "groundingChunkIndices": [0, 99]}]}}]})
+    with patch.object(research.llm, "BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"), \
+            patch.object(research.llm, "API_KEY", "test-key"), patch.object(research.llm.httpx, "post", return_value=grounded) as native:
+        native_hits = research.llm.search_public(shared["topic"], session_id=shared["id"])
+        assert len(native_hits) == 1 and native_hits[0]["url"] == "https://example.org/actual"
+        assert "uncited" not in native_hits[0]["text"]
+        assert native.call_args.kwargs["json"]["tools"] == [{"googleSearch": {}}]
+        assert store.list_traces(shared["id"])[-1]["op"] == "research"
     failed = store.get_session(store.create_session("PhD at 30"))
     with patch.dict(os.environ, {"MINISTERS_WEB_RESEARCH": "1"}), patch.object(research, "public_reactions", side_effect=httpx.ConnectError("offline")):
         research.prepare(failed)

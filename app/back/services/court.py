@@ -61,7 +61,11 @@ def _factor_force(s: dict, src: str) -> tuple[float, list[str]]:
 
 def _argument(data: dict, sources: dict) -> dict:
     reason = _text(data.get("reason"))
-    source_id = _text(data.get("source"), limit=50)
+    raw_source = data.get("source")
+    source_id = _text(raw_source[0] if isinstance(raw_source, list) and raw_source else raw_source, limit=200)
+    if source_id not in sources:
+        candidates = re.findall(r"(?:public|library|context|factor|emperor)-[\w]+|\btopic\b", source_id)
+        source_id = next((key for key in candidates if key in sources), "")
     source = sources.get(source_id)
     claimed = re.search(r"新闻|研究显示|数据证明|统计表明|据报道|上次|去年|上周|曾承诺", reason + _text(data.get("text")))
     unsupported = bool(claimed and not any(claimed.group() in row["text"] for row in sources.values()))

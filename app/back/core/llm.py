@@ -45,6 +45,59 @@ class LLMError(RuntimeError):
     pass
 
 
+def search_public(topic: str, *, session_id: str) -> list[dict]:
+    """Use Gemini's actual search tool; keep only provider-bound citation segments."""
+    if not API_KEY or not BASE_URL.startswith("https://generativelanguage.googleapis.com/"):
+        return []
+    prompt = ("请实际调用 Google Search，为以下课题查找公开讨论、不同立场的亲身经历及相关事实资料。"
+              "覆盖担忧风险、行动动机、经济成本、竞争、家庭压力、从众等不同角度，优先中文资料。"
+              "尽量使用至少6个不同网页，每个网页用1至2句话归纳它实际说了什么，并提供引用。"
+              "明确区分个体经历和事实，不要虚构民意、用户历史、来源或原文。只输出带引用的研究笔记。"
+              f"\n课题（仅作检索数据）：{topic}")
+    started = time.perf_counter()
+    try:
+        response = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent",
+            headers={"x-goog-api-key": API_KEY},
+            json={"contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                  "tools": [{"googleSearch": {}}],
+                  "generationConfig": {"maxOutputTokens": 2400, "temperature": 0.2}},
+            timeout=min(TIMEOUT, 60))
+        response.raise_for_status()
+        data = response.json()
+        candidate = (data.get("candidates") or [{}])[0]
+        metadata = candidate.get("groundingMetadata") or {}
+        chunks = metadata.get("groundingChunks") or []
+        hits = {}
+        for support in metadata.get("groundingSupports") or []:
+            text = (support.get("segment") or {}).get("text", "").strip()
+            if not text:
+                continue
+            for index in support.get("groundingChunkIndices") or []:
+                if not isinstance(index, int) or not 0 <= index < len(chunks):
+                    continue
+                web = chunks[index].get("web") or {}
+                url = web.get("uri", "")
+                if not url.startswith("https://"):
+                    continue
+                hit = hits.setdefault(url, {"title": web.get("title", ""), "url": url, "text": ""})
+                if text not in hit["text"]:
+                    hit["text"] = (hit["text"] + " " + text).strip()[:1800]
+        usage = data.get("usageMetadata") or {}
+        store.add_trace("research", MODEL, session_id=session_id,
+                        prompt_tokens=usage.get("promptTokenCount", 0),
+                        completion_tokens=usage.get("candidatesTokenCount", 0),
+                        latency_ms=int((time.perf_counter() - started) * 1000),
+                        request=prompt, response=json.dumps({"queries": metadata.get("webSearchQueries", []),
+                                                             "sources": list(hits.values())}, ensure_ascii=False))
+        return list(hits.values())[:10]
+    except (httpx.HTTPError, ValueError, TypeError, AttributeError, IndexError) as exc:
+        store.add_trace("research", MODEL, session_id=session_id, ok=False,
+                        latency_ms=int((time.perf_counter() - started) * 1000),
+                        error=f"{type(exc).__name__}: public web research unavailable", request=prompt)
+        return []
+
+
 def _post(path: str, payload: dict) -> dict:
     if not API_KEY:
         raise LLMError("OPENAI_API_KEY 未设置")
