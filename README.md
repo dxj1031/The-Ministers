@@ -6,7 +6,7 @@
 
 **线上**：[朝堂](https://dxj1031.github.io/personal-page/ministers/) · [监控台](https://dxj1031.github.io/personal-page/ministers/console.html)
 
-**桌面入口**：运行 `tools/install_desktop.ps1` 后双击桌面“猫皇朝堂”。首次填入 Google AI Studio 的 API Key，后续自动启动本地服务并打开页面；“猫皇朝堂设置”用于重新填写密钥或模型。本地记录保存在 `data/`，不会随源码发布。
+**桌面入口**：运行 `tools/install_desktop.ps1` 后双击桌面“猫皇朝堂”。默认检测 RTX 5060 Ti 并使用本机 Ollama，不需要云模型密钥；也可在“猫皇朝堂设置”中选择 Google AI。之后自动启动本地服务并打开页面。本地记录保存在 `data/`，不会随源码发布。
 
 **免费后端部署**：根目录 `render.yaml` 使用 Render Free 和 Gemini 3.5 Flash-Lite，带私人朝堂访问口令。免费服务休眠、重启后会清空云端 SQLite；本地桌面版不受此限制。[部署和接线说明](docs/deploy_online.md)。配置与回归已完成，云端服务仍需开通并填入 Google API Key 后实测。
 

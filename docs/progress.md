@@ -14,7 +14,7 @@
 
 增加私人朝堂口令、签名 Cookie、到期校验与口令尝试限流，记录和模型接口均受保护。Pages 入口可配置跳转到实测通过的后端页面，避免跨站 Cookie。部署回归、前端回归、交互及群辩回归通过。
 
-增加本地桌面启动器：首次填写一次 Google API Key，之后后台启动本机 API 并打开网页；设置存放在被 Git 忽略的 `data/`。桌面快捷方式“猫皇朝堂”“猫皇朝堂设置”已创建并核对，启动器回归验证仅监听 localhost、不将密钥写入网址或运行元数据，以及重复启动复用服务。真实 Google 模型调用仍待用户创建密钥后验证。
+增加本地桌面启动器：默认检测 5060 Ti 并加载 Ollama，确认实际显存使用后启动本机 API 并打开网页，本地显卡模式无需密钥；设置存放在被 Git 忽略的 `data/`。桌面快捷方式“猫皇朝堂”“猫皇朝堂设置”已创建并核对，启动器回归验证仅监听 localhost、不将密钥写入网址或运行元数据，以及重复启动复用服务。真实 Google 模型调用仍待用户创建密钥后验证。
 
 ## 全流程自适应补齐
 
@@ -180,3 +180,5 @@ python -m app.back.evaluation.runner --offline --label check --lean 0.8   # 迎�
 
 线上页在 [personal-page](https://github.com/dxj1031/personal-page) 的 `ministers/` 目录，
 由 `tools/deploy_pages.py` 同步 —— 本仓库提交不会更新线上。
+
+本机已实测 RTX 5060 Ti 16GB + qwen2.5:14b，Ollama 报告 size_vram=9480584559 字节，桌面后端 127.0.0.1:8018 健康检查通过。Google AI Studio 个人账号已确认免费档，专用密钥已按用户授权配置到 Render；用户已确认创建免费公网服务，正在部署，尚未确认上线成功。

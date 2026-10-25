@@ -31,8 +31,8 @@ python tools/deploy_pages.py
 
 ## 本地桌面入口
 
-运行 tools/install_desktop.ps1 后，桌面会出现“猫皇朝堂”和“猫皇朝堂设置”。前者双击自动启动本地 API 并打开浏览器，后者重新填写 Google AI 密钥或模型名。
+运行 tools/install_desktop.ps1 后，桌面会出现“猫皇朝堂”和“猫皇朝堂设置”。前者双击检测 5060 Ti、加载本机 Ollama 后启动 API 并打开浏览器，后者切换自动、本地显卡或 Google AI 模式。
 
-首次启动需填一次 Google API Key，保存在被 Git 忽略的 data/desktop-google.json。服务只监听 127.0.0.1，使用本机 data/ministers.db 保存历史，关闭网页后后台服务继续运行。桌面入口不依赖 Render；本地保存的密钥不会随源码发布。
+本地显卡模式无需 API Key。检测到 5060 Ti 后必须确认 Ollama 的 size_vram 大于零，才视为 GPU 就绪；未使用显存会报错，不会悄悄切换云端。显卡未连接时，只有已配置 Google 密钥才会改用云端。选填的配置保存在被 Git 忽略的 data/desktop-google.json。服务只监听 127.0.0.1，使用本机 data/ministers.db 保存历史，关闭网页后后台服务继续运行。桌面入口不依赖 Render；本地保存的密钥不会随源码发布。
 
 官方依据：[Render 免费服务](https://render.com/docs/free)、[Gemini 定价](https://ai.google.dev/gemini-api/docs/pricing)、[兼容接口](https://ai.google.dev/gemini-api/docs/openai)。

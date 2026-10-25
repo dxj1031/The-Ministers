@@ -11,7 +11,7 @@ foreach ($courtEntry in @(@{Name='猫皇朝堂';Args=''}, @{Name='猫皇朝堂�
     $courtLink.TargetPath = $courtPythonw
     $courtLink.Arguments = '"' + (Join-Path $PSScriptRoot 'desktop_court.py') + '"' + $courtEntry.Args
     $courtLink.WorkingDirectory = $courtRoot
-    $courtLink.Description = 'Google AI court: starts locally and opens in your browser.'
+    $courtLink.Description = 'Local 5060 Ti first, optional Google AI; opens the court in your browser.'
     $courtLink.IconLocation = $courtPythonw + ',0'
     $courtLink.Save()
 }
