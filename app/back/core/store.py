@@ -183,7 +183,7 @@ def current_stances(session_id: str) -> dict[str, dict]:
         rows = _rows(c.execute(
             """SELECT t.minister, t.stance, t.influence, t.seq
                  FROM turn t
-                 JOIN (SELECT minister, MAX(seq) AS m FROM turn WHERE session_id=? GROUP BY minister) x
+                 JOIN (SELECT minister, MAX(seq) AS m FROM turn WHERE session_id=? AND kind != 'verdict' GROUP BY minister) x
                    ON x.minister = t.minister AND x.m = t.seq
                 WHERE t.session_id=?""",
             (session_id, session_id),

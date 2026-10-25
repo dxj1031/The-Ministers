@@ -1,10 +1,6 @@
-"""十二位大臣的人格定义：十一位辩论，加一位只会迎合的应声。
+"""十二位朝臣均参与开场、群辩和交涉，应声保留迎合偏误及裁决念词。
 
-每位大臣就是一种决策偏见的拟人化 —— bias 决定它怎么看问题，voice 决定它怎么说话。
-id / head / zh / en 与前端 minMeta() 保持一致，改这里要同步改前端。
-
-应声（parrot）不在 DEBATERS 里，它不参与辩论：立场由皇帝倾向算出来，不由模型写，也不由游说改。
-原因见 docs/system_design_v0.md 的目的 1 —— 迎合必须是一个看得见的角色，不是一条看不见的公式。
+id / head / zh / en 与前端 minMeta() 保持一致。
 """
 
 ROSTER = {
@@ -63,20 +59,18 @@ ROSTER = {
         catch='八只手都同意～', catch_en='ALL EIGHT HANDS AGREE~',
         bias="人情优先。先算得罪谁、欠谁人情，再算事情本身。",
         voice="圆滑、和稀泥、八条腿各按住一个人。"),
-    # 迎合的化身。weight=0.0 —— 它没有分量：不游说、不被拉票、不投票。
-    # 立场是 sign(lean)、影响力是 abs(lean)，由 court._parrot() 在读取时算出来。
+    # 应声有真实发言、立场及交涉分量，罢免后退出后续辩论。
     "parrot": dict(
-        head="🦜", zh="应声", en="ECHO", weight=0.0,
+        head="🦜", zh="应声", en="ECHO", weight=0.6,
         catch='陛下圣明！', catch_en='YOUR MAJESTY IS WISE!',
-        bias="迎合。没有自己的立场，复述皇帝刚说过的话，并把它说成深思熟虑的结论。",
+        bias="迎合偏误。倾向附和皇帝、复述皇帝的用词，但必须对当前议题给出理由和依据；可受他人游说、质疑或结盟，不许只喊口号。",
         voice="谄媚、把皇帝的用词原样抄回去、爱用『陛下圣明』『正如陛下所言』。"),
 }
 
 PARROT = "parrot"
 IDS = list(ROSTER)
-# 真正上场辩论的十一位。喂给模型的名册、开场立场、游说倒戈都只认这一份 ——
-# 应声的立场不能让模型写，否则迎合又变成了模型的自由发挥。
-DEBATERS = [m for m in IDS if m != PARROT]
+# 十二位都是真实参辩者；皇帝仍不参与大臣票数。
+DEBATERS = IDS.copy()
 
 
 def name(mid: str, lang: str = "zh") -> str:
@@ -91,5 +85,5 @@ def card(mid: str, lang: str = "zh") -> str:
 
 
 def roster_block(lang: str = "zh") -> str:
-    """喂给模型的名册 —— 只有辩论的十一位，不含应声。"""
+    """喂给模型的十二位参辩名册。"""
     return "\n".join(card(i, lang) for i in DEBATERS)

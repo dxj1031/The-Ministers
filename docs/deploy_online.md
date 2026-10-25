@@ -36,3 +36,18 @@ python tools/deploy_pages.py
 本地显卡模式无需 API Key。检测到 5060 Ti 后必须确认 Ollama 的 size_vram 大于零，才视为 GPU 就绪；未使用显存会报错，不会悄悄切换云端。显卡未连接时，只有已配置 Google 密钥才会改用云端。选填的配置保存在被 Git 忽略的 data/desktop-google.json。服务只监听 127.0.0.1，使用本机 data/ministers.db 保存历史，关闭网页后后台服务继续运行。桌面入口不依赖 Render；本地保存的密钥不会随源码发布。
 
 官方依据：[Render 免费服务](https://render.com/docs/free)、[Gemini 定价](https://ai.google.dev/gemini-api/docs/pricing)、[兼容接口](https://ai.google.dev/gemini-api/docs/openai)。
+
+
+## 2026-10-25 入口核查
+
+已验证 https://the-ministers.onrender.com/api/health 返回 200 和 `{"ok":true}`，朝堂页面 `/front/The%20Court.dc.html` 返回 200。旧 Pages 页面未配置后端跳转，向 GitHub Pages 请求 `/api/health` 返回 404；其 “Court unavailable” 由此产生。personal-page 的入口已增加到上述 Render 朝堂页面的跳转，保留查询参数和锚点。此检查未使用访问口令，也未验证线上模型生成。
+
+## 公开资料检索
+
+`MINISTERS_WEB_RESEARCH=1`（默认）在开堂时按十二位大臣各自的情绪视角调用真实网络搜索。只把议题和情绪关键词发给搜索服务，不发送背景或用户文库。默认使用 Bing RSS；英文课题没有相关结果时用 Hacker News 的公开评论搜索作备用，并明确标注具体社区，不能代表全部公众；可选设置 `MINISTERS_SEARCH_API_KEY` 使用 Tavily Search，无需安装额外 SDK。搜索服务的额度以服务账号为准。
+
+每位大臣最多两条摘要，保留原始链接，做课题词相关性过滤；查询、耗时、命中数及失败状态进入 retrieval 记录。摘要标为 `public_reaction`，不能冒充已核实事实、全文阅读或民意比例。检索失败或没有相关结果时，界面显示资料缺口。一次朝会只进行一批公开检索，后续发言复用资料；模型生成的台词不再写回事实文库。
+
+开堂页新增 TXT、Markdown、JSON 上传和粘贴入口（200 KB），通过 `/api/library` 写入本机或当前服务的公共用户文库。用户文库仍受朝堂访问口令保护；共享口令的使用者共用文库。
+
+讨论取消五轮上限，由用户点击“结束讨论 · 圣裁”停止。兼容字段 `rounds_left=null` 表示不限轮数，裁决后为 0。旧 SSE 接口每次请求最多生成一轮，防止取消上限后无人观看仍无限生成。前端使用按需生成，不依赖该流。

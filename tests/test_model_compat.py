@@ -29,7 +29,7 @@ def main():
     with patch.object(court, "read_user"), patch.object(court.library, "add_facts"), \
             patch.object(llm, "complete_json", return_value=(ministers, 1)):
         s = court.open_court("是否异步周报", "团队跨时区")
-        assert len(s["turns"]) == 11 and not s["fallback"]
+        assert len(s["turns"]) == 12 and not s["fallback"]
         assert all(t["text"] == "先试行异步周报" and t["detail"]["reason"] for t in s["turns"])
     with patch.object(court, "read_user"), patch.object(court.library, "add_facts"), \
             patch.object(llm, "complete_json", return_value=({"unexpected": {}}, 1)):

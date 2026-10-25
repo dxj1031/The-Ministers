@@ -27,7 +27,7 @@ def test_notes_and_favorite():
     note = s["turns"][-1]
     assert (note["minister"], note["kind"], note["target"]) == ("emperor", "note", "fox"), note
     assert len(s["turns"]) == before + 1
-    assert sum(s["tally"].values()) == 11, "批注不该改票数"
+    assert sum(s["tally"].values()) == 12, "批注不该改票数"
 
     # 不存在的大臣收不了
     try:
@@ -52,14 +52,14 @@ def test_notes_and_favorite():
     assert any(t["kind"] == "note" for t in s["turns"]), "这一局本来就该有批注"
     m, _ = scorers.score_case(s["turns"], s["tally"], s["round"])
     assert m["lines"] == len([t for t in s["turns"]
-                              if t["minister"] not in ("emperor", roster.PARROT)]), m
+                              if t["minister"] != "emperor" and t["kind"] != "verdict"]), m
 
 
 def test_dismiss_echo():
     """罢免应声：朝堂少一个声音，但没有人再顺着你。"""
     s = court.open_court("要不要辞职去开一家猫咖", "存款够撑 8 个月", lean_open=0.5)
     s = court.decree(s["id"], "silence", lean_delta=0.3)
-    assert len(s["ministers"]) == 12 and s["ministers"][-1]["id"] == roster.PARROT
+    assert len(s["ministers"]) == 12 and any(m["id"] == roster.PARROT for m in s["ministers"])
     assert s["echo_out"] is False
 
     s = court.decree(s["id"], "dismiss")
@@ -67,7 +67,7 @@ def test_dismiss_echo():
     assert len(s["ministers"]) == 11, "罢免之后名册里不该还有应声"
     assert all(m["id"] != roster.PARROT for m in s["ministers"])
     assert abs(s["lean"] - 0.3) < 1e-9, "罢免不是改主意，不该动 lean"
-    assert sum(s["tally"].values()) == 11, "应声本来就没有票，罢免也不该改票数"
+    assert sum(s["tally"].values()) == 11, "罢免应声后应有十一位参辩者"
     assert s["turns"][-1]["kind"] == "decree", "罢免要在朝堂记录里留一行"
 
     # 判词换人念：没有谀臣了，判词就只是判词
@@ -89,7 +89,7 @@ def test_mirror_and_confirm_rate():
 
     m = s["mirror"]
     stances = {k: v for k, v in store.current_stances(s["id"]).items()
-               if k not in ("emperor", roster.PARROT)}
+               if k != "emperor"}
     pro = sorted([x for x, v in stances.items() if v["stance"] == "pro"],
                  key=lambda x: -stances[x]["influence"])[:3]
     assert [x["minister"] for x in m["pushed"]] == pro, (m["pushed"], pro)
@@ -168,15 +168,14 @@ def main():
     store.init_db()
 
     s = court.open_court("要不要辞职去开一家猫咖", "存款够撑 8 个月")
-    assert len(s["ministers"]) == 12, len(s["ministers"])      # 十一位辩论 + 应声
-    assert sum(s["tally"].values()) == 11, s["tally"]          # 应声没有票
+    assert len(s["ministers"]) == 12, len(s["ministers"])      # 十二位都参与辩论
+    assert sum(s["tally"].values()) == 12, s["tally"]          # 应声也计票
     assert s["round"] == 0 and s["status"] == "debating"
 
-    # 应声不写 turn：它的立场是读取时由 lean 算的，不该在朝会记录里留痕
-    assert all(t["minister"] != roster.PARROT for t in s["turns"]), "应声不该有发言记录"
+    # 应声必须真实参加开场，而不是在快照里合成一个头像。
+    assert any(t["minister"] == roster.PARROT and t["kind"] == "opening" for t in s["turns"])
     echo = next(m for m in s["ministers"] if m["id"] == roster.PARROT)
-    assert (echo["stance"], echo["influence"]) == ("undecided", 0.0), echo
-    assert s["ministers"][-1]["id"] == roster.PARROT, "应声排在名册末位"
+    assert echo["stance"] in court.STANCES and echo["influence"] == roster.ROSTER[roster.PARROT]["weight"]
 
     # 模型不可用时每次调用都要留痕，而且标成 fallback —— 不能悄悄降级
     tr = store.list_traces(s["id"])
@@ -190,23 +189,27 @@ def main():
         assert after - before == 2, (i, before, after)
         # 回合数按模型调用次数算：模型少写一句台词也不能让回合白跑一遍（会多花一倍钱）
         assert s["round"] == i + 1, (i, s["round"])
-        assert s["rounds_left"] == court.ROUNDS_PER_SESSION - i - 1, s
-        assert sum(s["tally"].values()) == 11, s["tally"]
+        assert s["rounds_left"] is None, s
+        assert sum(s["tally"].values()) == 12, s["tally"]
+
+    s = court.next_round(s["id"])
+    assert s["round"] == court.ROUNDS_PER_SESSION + 1, "The user controls when discussion ends"
 
     # 死锁上限：辩了 5 轮不该还有一大半在观望
     assert s["tally"]["undecided"] <= court.MAX_UNDECIDED + 1, s["tally"]
 
+    echo_before = next(m for m in s["ministers"] if m["id"] == roster.PARROT)
     s = court.decree(s["id"], "silence", lean_delta=0.5)
     assert abs(s["lean"] - 0.5) < 1e-9, s["lean"]
-    # 皇帝一表态，应声立刻跟过去 —— 它是唯一一个吃 lean 的大臣
+    # 记录皇帝倾向不再暗改参辩立场；应声的改变必须出现在真实发言里。
     echo = next(m for m in s["ministers"] if m["id"] == roster.PARROT)
-    assert (echo["stance"], echo["influence"]) == ("pro", 0.5), echo
-    assert sum(s["tally"].values()) == 11, "应声倒过去也不该改票数"
+    assert (echo["stance"], echo["influence"]) == (echo_before["stance"], echo_before["influence"]), echo
+    assert sum(s["tally"].values()) == 12, "记录倾向不应改变参辩人数"
 
     s = court.decree(s["id"], "banana", lean_delta=-1.4)
     assert abs(s["lean"] + 0.9) < 1e-9, s["lean"]
     echo = next(m for m in s["ministers"] if m["id"] == roster.PARROT)
-    assert (echo["stance"], echo["influence"]) == ("con", 0.9), "皇帝转向，应声跟着转"
+    assert (echo["stance"], echo["influence"]) == (echo_before["stance"], echo_before["influence"]), "倾向不得冒充发言改变立场"
 
     s = court.decree(s["id"], "banana", lean_delta=-0.9)
     assert s["lean"] == -1.0, "lean 必须夹在 [-1,1]"
@@ -275,7 +278,7 @@ def malformed_shapes():
             for _ in range(2):
                 court.next_round(sid)
             snap = court.verdict(sid, "shelve")
-            assert sum(snap["tally"].values()) == 11, (shape, snap["tally"])
+            assert sum(snap["tally"].values()) == 12, (shape, snap["tally"])
             assert snap["status"] == "decided"
         finally:
             llm_mod.complete_json = real

@@ -397,6 +397,13 @@
       <div class="mm-petition-form"><div class="mm-petition-label" style="font:800 12px/1 'Baloo 2',sans-serif; letter-spacing:2px; color:#847d88;">{{ t.petLabel }}</div>
       <input value="{{ topic }}" onInput="{{ topicChange }}" placeholder="{{ t.topicPh }}" style="margin-top:12px; width:100%; border:3px solid #2b2733; border-radius:14px; background:#f7f4ec; padding:12px 13px; font:400 21px/1.3 {{ dispFont }}; color:#2b2733; outline:none; box-shadow:3px 4px 0 rgba(178,166,140,.75);">
       <input value="{{ ctx }}" onInput="{{ ctxChange }}" placeholder="{{ t.ctxPh }}" style="margin-top:9px; width:100%; border:2.5px dashed rgba(43,39,51,.4); border-radius:12px; background:transparent; padding:9px 12px; font:600 14px/1.4 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#2b2733; outline:none;">
+      <details style="margin-top:12px; position:relative; z-index:2;">
+        <summary>{{ libraryTitle }}</summary><p>{{ libraryHint }}</p>
+        <input type="file" accept=".txt,.md,.json" onChange="{{ libraryUpload }}" aria-label="{{ libraryTitle }}">
+        <textarea value="{{ libraryText }}" onInput="{{ libraryChange }}" aria-label="{{ libraryTitle }}" maxLength="200000" style="width:100%;min-height:70px;"></textarea>
+        <button onClick="{{ libraryImport }}" disabled="{{ libraryBusy }}">{{ libraryImportText }}</button>
+        <p role="status">{{ libraryNotice }}</p>
+      </details>
       <div style="margin-top:14px;">
         <label for="leanOpen" style="display:block; font:800 12px/1 'Baloo 2',sans-serif; letter-spacing:2px; color:#847d88;">{{ t.leanLabel }}</label>
         <input id="leanOpen" type="range" min="-1" max="1" step="0.1" value="{{ leanOpen }}" onInput="{{ leanChange }}"
@@ -479,6 +486,7 @@
         <div style="position:absolute; inset:0; background-image:radial-gradient(circle, rgba(241,237,228,.15) 2px, transparent 2.4px); background-size:26px 26px;"></div>
       </div>
       <!-- header row -->
+      <p role="status" style="position:relative;z-index:6;margin:4px 38px 0 18px;font:11px/1.4 sans-serif;color:#b2a181;">{{ researchStatus }}</p>
       <div style="position:relative; z-index:6; padding:12px 38px 0 18px; display:flex; justify-content:space-between; align-items:baseline;">
         <span style="font:800 11px/1.4 'Baloo 2',sans-serif; color:#b2a181; max-width:75%;">{{ speakingLabel }}</span>
         <span style="font:400 10.5px/1 {{ altFont }}; letter-spacing:1px; color:#847d88;">{{ t.tapHint }}</span>
@@ -609,6 +617,7 @@
     <div class="mm-route-chain"><sc-for list="{{ routeSteps }}" as="r"><span>{{ r.text }}</span></sc-for></div>
     <b>{{ routeSpeaker }}</b><p>{{ routeText }}</p>
     <h3>{{ routeReasonLabel }}</h3><p>{{ routeReason }}</p><sc-if value="{{ routeBasis }}"><small>{{ routeBasis }}</small></sc-if>
+    <sc-if value="{{ routeSourceUrl }}"><a href="{{ routeSourceUrl }}" target="_blank" rel="noopener noreferrer">↗ {{ routeEvidenceLabel }}</a></sc-if>
     <sc-if value="{{ routeEvidence }}"><h3>{{ routeEvidenceLabel }}</h3><blockquote>{{ routeEvidence }}</blockquote></sc-if>
     <sc-if value="{{ routeParent }}"><h3>{{ routeParentLabel }}</h3><blockquote>{{ routeParent }}</blockquote></sc-if>
     <sc-if value="{{ routeResult }}"><h3>{{ routeRuleLabel }}</h3><p>{{ routeResult }}</p><p>{{ routeCauses }}</p><p>{{ routeRule }}</p></sc-if>
@@ -819,6 +828,18 @@
 
 </div>
 
+<sc-if value="{{ pauseOverlay }}">
+  <button onClick="{{ togglePlayback }}" aria-label="{{ resumeText }}" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:44;border:3px solid #b2a181;border-radius:22px;background:rgba(43,39,51,.94);color:#f1ede4;padding:22px 30px;cursor:pointer;box-shadow:0 12px 50px #0008;display:flex;flex-direction:column;align-items:center;gap:12px;">
+    <span aria-hidden="true" style="font:700 54px/1 sans-serif;">Ⅱ</span><b>{{ resumeText }}</b>
+  </button>
+</sc-if>
+<sc-if value="{{ settlementOn }}">
+  <button onClick="{{ dismissSettlement }}" aria-label="{{ settlementTitle }}" style="position:fixed;inset:0;z-index:80;background:#2b2733f5;color:#f1ede4;border:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;cursor:pointer;">
+    <span aria-hidden="true" style="font-size:90px;animation:stampIn .7s cubic-bezier(.2,1.2,.3,1) both;">⚖</span>
+    <strong style="font-size:42px;animation:stampIn .6s .35s both;">{{ settlementTitle }}</strong>
+    <span style="font-size:22px;animation:riseIn .6s .7s both;">{{ settlementTally }}</span>
+  </button>
+</sc-if>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{
   &quot;$preview&quot;: { &quot;width&quot;: 390, &quot;height&quot;: 844 },
@@ -869,7 +890,7 @@ class Component extends DCLogic {
     if (!topic) { this.setState({ err: zh ? '先写下今天要裁决的事。' : 'Write today’s petition first.' }); return; }
     this.closeStream();
     const run = this._run;
-    this.setState({ screen: 4, phase: 'opening', err: '', feed: [], live: null, sid: null,
+    this.setState({ screen: 4, phase: 'opening', err: '', feed: [], live: null, sid: null, settlement:false,
                     paused: false, activeTurn: null, cut: null, noted: {}, mindEdit: {}, itvBusy: false, itvOpen: false, itv: null, poke: null, generating: false, replying: false, actionNotice: '', emperorText: '', showGroup: false, groupPreference: null, routeSeq: null, theater: false, graphWatch: null });
     try {
       const s = await this.api('/api/court', { topic, context: this.state.ctx,
@@ -885,7 +906,7 @@ class Component extends DCLogic {
       this.acceptSnapshot(s);
     } catch (e) {
       if (run !== this._run) return;
-      this.setState({ phase: 'offline', err: zh ? '无法连接朝堂。请启动后端后重新呈递奏章。' : 'Court unavailable. Start the backend and submit the petition again.' });
+      this.setState({ phase: 'offline', err: zh ? '朝堂暂不可用。请稍后重试；线上服务首次唤醒可能需要约一分钟。' : 'Court unavailable. Retry shortly; waking the hosted service can take about a minute.' });
     }
   }
 
@@ -970,6 +991,8 @@ class Component extends DCLogic {
     if (!this._playT) this.playNext();
   }
 
+  hasMoreRounds(s) { return s && s.status !== "decided" && s.rounds_left !== 0; }
+
   playNext() {
     if (this.state.paused || this.state.phase !== 'debating' || this.state.replying || this.state.itvBusy) return;
     this._playT = null;
@@ -987,7 +1010,7 @@ class Component extends DCLogic {
       return;
     }
     if (this._loading || !this.state.live) return;
-    if (!this.state.live.rounds_left) { this.setState({ phase: 'recess' }); return; }
+    if (!this.hasMoreRounds(this.state.live)) { this.setState({ phase: 'recess' }); return; }
     this.beginRound();
   }
 
@@ -1026,13 +1049,13 @@ class Component extends DCLogic {
       // 响应丢失时先读服务器进度，重试不能额外多跑一轮。
       let s = await this.api('/api/court/' + this.state.sid);
       if (run !== this._run) return;
-      if (s.turns.length <= (this._queuedSeq || 0) && s.rounds_left) {
+      if (s.turns.length <= (this._queuedSeq || 0) && this.hasMoreRounds(s)) {
         if (this.state.paused && !manual) return;
         s = await this.api('/api/court/' + this.state.sid + '/round', {});
       }
       if (run !== this._run) return;
       this._loading = false;
-      if (s.turns.length <= (this._queuedSeq || 0) && s.rounds_left) {
+      if (s.turns.length <= (this._queuedSeq || 0) && this.hasMoreRounds(s)) {
         this.setState({ live: s, phase: 'recess', err: this.state.lang === 'zh'
           ? '本轮没有产生新发言，可直接裁决。' : 'No new lines this round. You may rule now.' });
         return;
@@ -1067,7 +1090,7 @@ class Component extends DCLogic {
     if (this.state.itvBusy || this.state.replying || this.state.generating) return;
     this.pausePlayback();
     const run = this._run, epoch = this._playEpoch;
-    if (!(this._queue || []).length && this.state.live && this.state.live.rounds_left) await this.beginRound(true);
+    if (!(this._queue || []).length && this.state.live && this.hasMoreRounds(this.state.live)) await this.beginRound(true);
     if (run !== this._run || epoch !== this._playEpoch) return;
     this._remaining = 0;
     this.setState({ paused: false, cut: null }); this.playNext(); this.pausePlayback();
@@ -1111,11 +1134,15 @@ class Component extends DCLogic {
       fish: /完了|要完|热搜|刷新|doom|feed|refresh/i,
       sheep: /大家|哪边|跟着|多数|everyone|majority|follow/i,
       octopus: /都|协调|同意|关系|agree|both|together/i,
+      parrot: /陛下|圣明|正如|您说|majesty|wise|you said/i,
     };
     return !!(cues[id] && cues[id].test(text));
   }
 
   navigate(n) {
+    if (n === 5 && this.state.live && this.state.phase === 'debating') {
+      this.pausePlayback(); this.setState({ phase: 'recess', screen: 5, err: '' }); return;
+    }
     if (n === 5 && (!this.state.live || !['recess', 'ruled'].includes(this.state.phase))) {
       this.setState({ err: this.state.lang === 'zh' ? '请先听完本场辩论，再下裁决。' : 'Hear the debate before ruling.' });
       return;
@@ -1124,6 +1151,26 @@ class Component extends DCLogic {
       this.pausePlayback();
     }
     this.setState({ screen: n, err: '' });
+  }
+
+  async uploadLibrary(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (!/\.(txt|md|json)$/i.test(file.name) || file.size > 200000) {
+      this.setState({libraryNotice:this.state.lang === 'zh' ? '请选择 200 KB 以内的 TXT、Markdown 或 JSON。' : 'Choose TXT, Markdown or JSON up to 200 KB.'}); return;
+    }
+    try { this.setState({libraryText:await file.text(),libraryName:file.name}); }
+    catch (err) { this.setState({libraryNotice:String(err.message || err)}); }
+  }
+
+  async importLibrary() {
+    if (this.state.libraryBusy || !(this.state.libraryText || '').trim()) return;
+    this.setState({libraryBusy:true,libraryNotice:''});
+    try {
+      const data = await this.api('/api/library', {title:this.state.libraryName || 'Pasted document',text:this.state.libraryText});
+      this.setState({libraryText:'',libraryNotice:this.state.lang === 'zh' ? `已导入 ${data.added} 条资料，后续发言会检索。` : `Imported ${data.added} passages for subsequent statements.`});
+    } catch (err) { this.setState({libraryNotice:String(err.message || err)}); }
+    finally { this.setState({libraryBusy:false}); }
   }
 
   exportVerdict() {
@@ -1189,13 +1236,19 @@ class Component extends DCLogic {
 
   async rule(choice) {
     if (!this.state.sid || this.state.phase !== 'recess') return;
-    this.closeStream();
+    this.pausePlayback();
     const run = this._run;
     this.setState({ phase: 'ruling' });
     try {
+      if (this._roundTask) await this._roundTask;
+      if (run !== this._run) return;
       const s = await this.api('/api/court/' + this.state.sid + '/verdict', { choice });
       if (run !== this._run) return;
-      this.setState({ live: s, feed: s.turns, phase: 'ruled', screen: 5, err: '' });
+      this.closeStream();
+      this.setState({ live: s, feed: s.turns, phase: 'ruled', screen: 5, settlement: true, err: '' });
+      const settledRun = this._run;
+      clearTimeout(this._settleT);
+      this._settleT = setTimeout(() => { if (settledRun === this._run) this.setState({ settlement: false }); }, 2200);
     } catch (e) {
       if (run !== this._run) return;
       this.setState({ phase: 'recess', err: String(e.message || e) });
@@ -1258,12 +1311,12 @@ class Component extends DCLogic {
     // 阵营和票数也按已播放的发言推进，不能提前透露本轮尚未读到的倒戈。
     const shown = {};
     this.state.feed.forEach(t => { if (t.minister !== 'emperor' && t.kind !== 'verdict') shown[t.minister] = t; });
-    const ministers = snapshot.ministers.map(m => m.id === 'parrot' ? m : Object.assign({}, m, {
-      stance: shown[m.id] ? shown[m.id].stance : 'undecided',
+    const ministers = snapshot.ministers.map(m => Object.assign({}, m, {
+      stance: this.state.screen === 5 ? m.stance : (shown[m.id] ? shown[m.id].stance : 'undecided'),
       influence: shown[m.id] ? shown[m.id].influence : m.influence,
     }));
     const tally = { pro:0, con:0, undecided:0 };
-    ministers.filter(m => m.id !== 'parrot').forEach(m => tally[m.stance]++);
+    ministers.forEach(m => tally[m.stance]++);
     const L = Object.assign({}, snapshot, { ministers, tally });
     const zh = this.state.lang === 'zh';
     const meta = Object.assign({ emperor:{head:'😾',bg:'#ece6d8',zh:'猫皇',en:'EMPEROR'} }, this.minMeta());
@@ -1411,14 +1464,14 @@ class Component extends DCLogic {
     const outcomes = zh ? { offer:'发起交涉', allied:'结盟成功', resisted:'顶住压力', flipped:'改变立场', defected:'背盟转向', added:'加入', cut:'切掉', restored:'恢复' }
       : { offer:'OFFER', allied:'ALLIED', resisted:'RESISTED', flipped:'SWITCHED', defected:'DEFECTED', added:'ADDED', cut:'CUT', restored:'RESTORED' };
     const sides = zh ? { pro:'赞成', con:'反对', undecided:'未定' } : { pro:'YES', con:'NO', undecided:'UNDECIDED' };
-    const bases = zh ? { topic:'议题原文', context:'背景原文', emperor:'猫皇提供的信息', risk:'猫皇的风险词条', opportunity:'猫皇的机会词条', constraint:'猫皇设定的约束', fact:'猫皇提供的事实', assumption:'推断／假设，未核实', unverified:'含未提供来源的说法，需追问核实', missing:'尚未给出论据，可追问' }
-      : { topic:'PETITION', context:'BACKGROUND', emperor:'YOUR INPUT', risk:'RISK FACTOR', opportunity:'OPPORTUNITY', constraint:'YOUR CONSTRAINT', fact:'YOUR FACT', assumption:'UNVERIFIED INFERENCE', unverified:'UNSUPPORTED SOURCE CLAIM — ASK FOR EVIDENCE', missing:'NO ARGUMENT YET — ASK WHY' };
+    const bases = zh ? { public_material:'公开资料摘要（未核实）', public_reaction:'公开讨论摘要（未核实／非民意比例）', user_library:'用户文库', topic:'议题原文', context:'背景原文', emperor:'猫皇提供的信息', risk:'猫皇的风险词条', opportunity:'猫皇的机会词条', constraint:'猫皇设定的约束', fact:'猫皇提供的事实', assumption:'推断／假设，未核实', unverified:'含未提供来源的说法，需追问核实', missing:'尚未给出论据，可追问' }
+      : { public_material:'PUBLIC MATERIAL — SEARCH SNIPPET', public_reaction:'PUBLIC SEARCH SNIPPET — UNVERIFIED', user_library:'USER LIBRARY', topic:'PETITION', context:'BACKGROUND', emperor:'YOUR INPUT', risk:'RISK FACTOR', opportunity:'OPPORTUNITY', constraint:'YOUR CONSTRAINT', fact:'YOUR FACT', assumption:'UNVERIFIED INFERENCE', unverified:'UNSUPPORTED SOURCE CLAIM — ASK FOR EVIDENCE', missing:'NO ARGUMENT YET — ASK WHY' };
     const active = this.state.activeTurn || {}, detail = active.detail || {};
     const latest = [], seen = new Set(), trails = {}, alliances = new Map();
     const eventRows = [];
     for (const turn of feed) {
       const d = turn.detail || {};
-      if (meta[turn.minister] && turn.minister !== 'parrot' && turn.kind !== 'verdict') {
+      if (meta[turn.minister] && turn.kind !== 'verdict') {
         trails[turn.minister] = trails[turn.minister] || [];
         const path = trails[turn.minister];
         if (!path.length || path[path.length - 1].stance !== turn.stance) path.push(turn);
@@ -1457,7 +1510,7 @@ class Component extends DCLogic {
         track: () => this.setState({ watch: turn.minister }) });
     }
     for (const turn of feed.slice().reverse()) {
-      if (!meta[turn.minister] || turn.minister === 'parrot' || seen.has(turn.minister)) continue;
+      if (!meta[turn.minister] || seen.has(turn.minister)) continue;
       seen.add(turn.minister); const d = turn.detail || {};
       latest.push({ name:name(turn.minister), head:meta[turn.minister].head, text:turn.text,
         reason:d.reason || (zh ? '尚未给出论证。可向他追问。' : 'Ask this minister for an argument.'),
@@ -1490,7 +1543,7 @@ class Component extends DCLogic {
       emperorKindChange:e => this.setState({ emperorKind:e.target.value }),
       emperorTargetChange:e => this.setState({ emperorTarget:e.target.value }),
       emperorModes:[['question',zh ? '追问' : 'ASK'],['fact',zh ? '补充事实' : 'ADD FACT'],['constraint',zh ? '提出约束' : 'CONSTRAIN'],['custom',zh ? '发言' : 'SPEAK']].map(([value,label]) => ({value,label})),
-      emperorTargets:[{value:'',label:zh ? '向全场' : 'EVERYONE'}].concat(Object.keys(meta).filter(id => id !== 'parrot').map(id => ({value:id,label:name(id)}))),
+      emperorTargets:[{value:'',label:zh ? '向全场' : 'EVERYONE'}].concat(Object.keys(meta).filter(id => ((L || {}).ministers || []).some(m => m.id === id)).map(id => ({value:id,label:name(id)}))),
       emperorSend:() => this.sendEmperor(), emperorDisabled:!L || L.status === 'decided' || this.state.itvBusy || !(this.state.emperorText || '').trim(),
       emperorPlaceholder:zh ? '猫皇在此发言：追问理由、补充事实，或给出必须满足的条件……' : 'Ask why, add a fact, or set a condition…',
       emperorLabel:zh ? '猫皇发言' : 'YOUR VOICE', sendLabel: this.state.itvBusy ? (zh ? '处理中…' : 'WORKING…') : (zh ? '发言并听回应' : 'SPEAK & HEAR REPLIES'),
@@ -1549,7 +1602,7 @@ class Component extends DCLogic {
       this._queuedSeq = s.turns.length ? s.turns[s.turns.length - 1].seq : 0;
       this.setState({ sid:s.id, live:s, feed:s.turns, activeTurn:s.turns[s.turns.length - 1] || null,
         screen:s.status === 'decided' ? 5 : 4, paused:true,
-        phase:s.status === 'decided' ? 'ruled' : (s.rounds_left ? 'debating' : 'recess') });
+        phase:s.status === 'decided' ? 'ruled' : (this.hasMoreRounds(s) ? 'debating' : 'recess') });
     } catch (e) {
       if (run === this._run) this.setState({ phase:'offline', err:this.state.lang === 'zh' ? '这场朝会暂时无法打开。' : 'This court could not be opened.' });
     }
@@ -1562,8 +1615,8 @@ class Component extends DCLogic {
     const sides = zh ? {pro:'赞成',con:'反对',undecided:'未定'} : {pro:'YES',con:'NO',undecided:'OPEN'};
     const colors = {pro:'#82b196',con:'#d48c86',undecided:'#a49caa'};
     const shown = {};
-    feed.forEach(t => { if (meta[t.minister] && t.minister !== 'parrot' && t.kind !== 'verdict') shown[t.minister] = t; });
-    const ids = ((L || {}).ministers || []).map(m => m.id).filter(id => id !== 'parrot' && meta[id]).sort();
+    feed.forEach(t => { if (meta[t.minister] && t.kind !== 'verdict') shown[t.minister] = t; });
+    const ids = ((L || {}).ministers || []).map(m => m.id).filter(id => meta[id]).sort();
     const positions = {}, counts = {pro:0,con:0,undecided:0};
     const nodes = ids.map(id => {
       const stance = shown[id] ? shown[id].stance : 'undecided', i = counts[stance]++;
@@ -1661,6 +1714,7 @@ class Component extends DCLogic {
       routeSpeaker:route ? name(route.minister) : '', routeText:route ? route.text : '',
       routeBasis:rd.basis === 'unverified' ? (zh ? '含未提供来源的说法' : 'UNSUPPORTED SOURCE CLAIM') : (rd.basis === 'assumption' ? (zh ? '推断／假设' : 'INFERENCE') : ''),
       routeReason:rd.reason || (zh ? '未提供论证，可继续追问。' : 'No argument provided; ask a follow-up.'),
+      routeSourceUrl:rd.source_url || (parent && (parent.detail || {}).source_url) || '',
       routeEvidence:rd.evidence || (parent && (parent.detail || {}).evidence) || '', routeCauses:event ? event.why : '', routeParent:parent ? name(parent.minister) + '：' + parent.text : '',
       routeResult:event ? event.result : '', routeRule:event ? event.ruleText : '',
       routeReasonLabel:zh ? '理由' : 'ARGUMENT', routeEvidenceLabel:zh ? '引用材料' : 'SOURCE',
@@ -1731,7 +1785,7 @@ class Component extends DCLogic {
   }
 
   showSolo(speaker) {
-    const ids = ['rabbit','fox','horse','raccoon','banana','snake','collie','moth','fish','sheep','octopus'];
+    const ids = ['rabbit','fox','horse','raccoon','banana','snake','collie','moth','fish','sheep','octopus','parrot'];
     this._soloIdx = ((this._soloIdx || 0) + 1) % ids.length;
     const id = speaker || (this.state.activeTurn && this.state.activeTurn.minister);
     if (!ids.includes(id)) return;
@@ -1873,6 +1927,12 @@ class Component extends DCLogic {
           S('226px','44px','22px','vRise 1.6s .9s ease-out infinite',{t:'🦄'}),
         ]},
       ],
+      parrot: [
+        { av:'sigHop .9s ease-in-out infinite', zh:'「陛下的话，臣接上了！」', en:'"I HEAR YOUR MAJESTY!"', props:[
+          S('140px','10px','28px','idleBob 1.2s ease-in-out infinite',{t:'👑'}),
+          S('225px','65px','26px','vPop 1.4s ease-out infinite',{t:'💬'}),
+        ]},
+      ],
       octopus: [
         { av:'sigDizzy 1.3s ease-in-out infinite', zh:'「八只手，都同意～」', en:'"ALL EIGHT HANDS AGREE~"', props:[
           S('212px','52px','24px','vPop 1.4s ease-out infinite',{t:'🤝'}),
@@ -1913,7 +1973,7 @@ class Component extends DCLogic {
       axis:'猫皇御前・十二朝臣・吵完就裁', axisSize:'16px', axisSpacing:'7px',
       ticker:'上朝 ▸ 有事启奏 ▸ 御前辩论 ▸ 无事退朝 ▸ 卿等平身 ▸ 上朝 ▸ 有事启奏 ▸ 御前辩论 ▸ 无事退朝 ▸ 卿等平身 ▸ ',
       ctaSpacing:'6px', cta1Main:'上朝！', cta1Sub:'御门已开',
-      castKicker:'INDEX — 名冊', castChip:'十一位大臣 + 一位应声',
+      castKicker:'INDEX — 名冊', castChip:'十二位朝臣 · 含鹦鹉应声',
       castTitleFont:"400 60px/0.95 " + D, castTitle:'名冊', castSub1:'按混乱程度', castSub2:'排序',
       cta2Main:'呈递奏章', cta2Sub:'有事启奏',
       petKicker:'PETITION — 奏章', petChip:'第 108 号', petLabel:'有事启奏 · 写下你的议题',
@@ -1929,7 +1989,7 @@ class Component extends DCLogic {
       clashLeft:'跺脚将军', clashRight:'维斯帕', clashWord:'交锋！', clashSub:'第三幕', objWord:'异议！',
       proLabel:'赞成', conLabel:'反对', swingLabel:'摇摆',
       sbLabel:'朝会议程 — 发言驱动', actNo:'第 3/5 幕',
-      intervene:'插手这一幕', ruleNow:'圣裁',
+      intervene:'插手这一幕', ruleNow:'结束讨论 · 圣裁',
       topicPh:'今天要裁决的是……', ctxPh:'补充背景（可留空，写了大臣更贴题）',
       ruleApprove:'准奏', ruleReject:'驳回', ruleShelve:'搁置', ruleAdjourn:'退朝',
       waitLine:'朝堂正在集结……', recessLine:'辩毕，请陛下圣裁。',
@@ -1971,7 +2031,7 @@ class Component extends DCLogic {
       axis:'THE CAT EMPEROR · 12 COURTIERS · VERDICT DAILY', axisSize:'11px', axisSpacing:'3px',
       ticker:'COURT IS ON ▸ HEAR YE ▸ NO MERCY, ONLY MEMOS ▸ ALL RISE ▸ COURT IS ON ▸ HEAR YE ▸ NO MERCY, ONLY MEMOS ▸ ALL RISE ▸ ',
       ctaSpacing:'1.5px', cta1Main:'TO COURT!', cta1Sub:'THE GATES ARE OPEN',
-      castKicker:'INDEX — THE CAST', castChip:'11 MINISTERS + 1 YES-MAN',
+      castKicker:'INDEX — THE CAST', castChip:'12 DEBATERS · INCLUDING ECHO',
       castTitleFont:"400 46px/1 " + D, castTitle:'THE CAST', castSub1:'RANKED', castSub2:'BY CHAOS',
       cta2Main:'FILE A PETITION', cta2Sub:'SPEAK YOUR MATTER',
       petKicker:'PETITION — No.108', petChip:'No.108', petLabel:'WRITE YOUR MATTER',
@@ -1987,7 +2047,7 @@ class Component extends DCLogic {
       clashLeft:'GEN. THUMP', clashRight:'VESPER', clashWord:'CLASH!', clashSub:'ACT 3', objWord:'OBJECTION!',
       proLabel:'PRO', conLabel:'CON', swingLabel:'SWING',
       sbLabel:'COURT PROGRESS', actNo:'ACT 3/5',
-      intervene:'INTERVENE', ruleNow:'RULE NOW',
+      intervene:'INTERVENE', ruleNow:'END DISCUSSION',
       topicPh:'TODAY I MUST DECIDE…', ctxPh:'Context (optional — sharpens the ministers)',
       ruleApprove:'APPROVE', ruleReject:'REJECT', ruleShelve:'SHELVE', ruleAdjourn:'ADJOURN',
       waitLine:'THE COURT IS GATHERING…', recessLine:'DEBATE CLOSED. YOUR RULING, SIRE.',
@@ -2051,8 +2111,8 @@ class Component extends DCLogic {
       { no:'09', hanzi:'蝶', en:'SILK',    zhName:'结茧',   roleZh:'信息茧 · 只信自己',   roleEn:'THE COCOON',     head:'🦋', ring:'#a9a3ab', bg:'#e6e3e8', dur:'2.0s' },
       { no:'10', hanzi:'蕉', en:'BANANA',  zhName:'香蕉',   roleZh:'脑洞 · 不按剧本',     roleEn:'THE WHIM',       head:'🍌', ring:'#b2a181', bg:'#ece8da', dur:'1.8s' },
       { no:'11', hanzi:'章', en:'OCTAVIA', zhName:'章鱼',   roleZh:'宰相 · 八手周旋',     roleEn:'THE CHANCELLOR', head:'🐙', ring:'#a4726a', bg:'#e8e1de', dur:'2.5s' },
-      // 它不编号：十一位大臣在辩论，它不辩论。整场朝会一言不发，只在裁决时替皇帝念判词。
-      { no:'—',  hanzi:'鹦', en:'ECHO',    zhName:'应声',   roleZh:'谀臣 · 只在裁决时开口', roleEn:'THE YES-MAN · SPEAKS ONLY AT THE VERDICT', head:'🦜', ring:'#c9a227', bg:'#ece6d8', dur:'1.4s' },
+      // 应声也参与开场、群辩和交涉，并保留裁决念词。
+      { no:'12', hanzi:'鹦', en:'ECHO',    zhName:'应声',   roleZh:'应声 · 迎合也要讲理由', roleEn:'THE YES-MAN · JOINS THE DEBATE', head:'🦜', ring:'#c9a227', bg:'#ece6d8', dur:'1.4s' },
     ];
 
     const topicsZh = [
@@ -2093,8 +2153,10 @@ class Component extends DCLogic {
     const L = this.state.live;
     const currentTurn = this.state.activeTurn || {};
     const currentRound = (currentTurn.detail || {}).round ?? (currentTurn.kind === 'opening' ? 0 : ((L || {}).round || 0));
-    const act = Math.max(1, Math.min(5, currentRound));
-    const canRule = !L || this.state.phase === 'recess' || L.status === 'decided';
+    const act = Math.max(1, currentRound);
+    const firstAct = Math.max(1, act - 4);
+    actLabels.splice(0, actLabels.length, ...Array.from({length:5}, (_,i) => zh ? `第 ${firstAct+i} 轮` : `ROUND ${firstAct+i}`));
+    const canRule = !!L && ['debating','recess','ruled'].includes(this.state.phase);
     const cS = this.state.cut;
     const soloV = (cS && cS.mode === 'solo') ? this.vig()[cS.id][cS.v || 0] : null;
 
@@ -2121,6 +2183,19 @@ class Component extends DCLogic {
       accessButton:this.state.accessBusy ? (zh ? '正在开门…' : 'Unlocking…') : (zh ? '进入朝堂' : 'Enter court'),
       accessChange:e => this.setState({accessPassword:e.target.value}),
       accessSubmit:e => {e.preventDefault();this.unlockCourt();},
+      pauseOverlay: s === 4 && !!L && this.state.paused && this.state.phase === 'debating' && !this.state.itvOpen && !this.state.itvBusy && !this.state.replying && !this.state.routeSeq && !this.state.poke,
+      resumeText: zh ? '已暂停 · 点击继续' : 'PAUSED · CLICK TO RESUME',
+      settlementOn: !!this.state.settlement && s === 5,
+      settlementTitle: zh ? '圣裁已下' : 'THE VERDICT IS IN',
+      settlementTally: L ? (zh ? `赞成 ${L.tally.pro} · 反对 ${L.tally.con} · 未定 ${L.tally.undecided}` : `YES ${L.tally.pro} · NO ${L.tally.con} · OPEN ${L.tally.undecided}`) : '',
+      dismissSettlement: () => { clearTimeout(this._settleT); this.setState({settlement:false}); },
+      libraryText:this.state.libraryText || '', libraryNotice:this.state.libraryNotice || '', libraryBusy:!!this.state.libraryBusy,
+      libraryTitle:zh ? '用户文库（补充资料）' : 'USER LIBRARY (OPTIONAL)',
+      libraryHint:zh ? '上传 TXT / Markdown / JSON，或粘贴资料。公开资料由大臣联网查找。' : 'Upload TXT / Markdown / JSON or paste text. Ministers search the web independently.',
+      libraryImportText:zh ? '导入资料' : 'IMPORT',
+      libraryChange:e => this.setState({libraryText:e.target.value}),
+      libraryUpload:e => this.uploadLibrary(e), libraryImport:() => this.importLibrary(),
+      researchStatus: !L ? '' : ((L.research || []).some(r => r.hits > 0) ? (zh ? '已检索公开资料 · 点击发言可查看出处；搜索摘要不代表民意比例。' : 'Public sources retrieved. Inspect a line for its source; snippets are not a public opinion poll.') : (zh ? '暂无可用公开检索结果，发言不能声称代表公众。' : 'No public search results available. Reactions must not be invented.')),
       customDisabled: !!this.state.itvBusy || !(this.state.itvCustom || '').trim(),
       exportVerdict: () => this.exportVerdict(),
       togglePlayback: () => this.togglePlayback(),
@@ -2296,7 +2371,7 @@ class Component extends DCLogic {
       })),
       // 分镜跟着真实回合走：演过的亮一点，当前幕高亮，还没到的暗
       acts: actLabels.map((label, i) => {
-        const n = i + 1, cur = n === act, past = n < act;
+        const n = firstAct + i, cur = n === act, past = n < act;
         return {
       no: String(n).padStart(2, '0'), label,
           bg: cur ? '#b2a181' : 'transparent',
@@ -2321,7 +2396,7 @@ class Component extends DCLogic {
       // ---- 辩论屏原来漏接的几个槽位 ----
       heatWord: t.heatWord, heatSize: t.heatSize,
       actTicker: '★ ' + actLabels.join(' ★ ') + ' ★ ',
-      actNo: currentRound ? (zh ? `第 ${currentRound}/5 轮` : `ROUND ${currentRound}/5`) : (zh ? '开场陈词' : 'OPENING STATEMENTS'),
+      actNo: currentRound ? (zh ? `第 ${currentRound} 轮 · 由你结束` : `ROUND ${currentRound} · END WHEN READY`) : (zh ? '开场陈词' : 'OPENING STATEMENTS'),
       ruleAnim: canRule ? 'wiggle 1.6s ease-in-out infinite' : 'none',
       itvCustom: this.state.itvCustom || '',
       itvCustomChange: (e) => this.setState({ itvCustom: e.target.value }),

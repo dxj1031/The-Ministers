@@ -78,7 +78,11 @@ async function main() {
   c.animateTurn(turn(99,'sheep','lobby','rabbit','con'),{stance:'pro'});
   assert.equal(c.state.cut.mode,'solo','Stance changes trigger signature animations');
   assert.equal(c.renderVals().hasResponse,true);
-  c.navigate(5); assert.equal(c.state.screen,4,'Cannot show fabricated verdict before debate ends');
+  assert.equal(c.renderVals().pauseOverlay,false);
+  c.pausePlayback(); assert.equal(c.renderVals().pauseOverlay,true);
+  c.navigate(5); assert.equal(c.state.screen,5,'The user can end discussion at any time');
+  assert.equal(c.state.phase,'recess');
+  c.setState({screen:4,phase:'debating'});
   c.togglePlayback();
   await c.pickItv('banana');
   assert.equal(c.state.itv,'banana','Banana animation remains available');
@@ -93,6 +97,9 @@ async function main() {
   assert.equal(new Set(c.state.feed.map(t=>t.seq)).size,c.state.feed.length);
   assert.equal(c.state.feed.length,server.turns.length);
   await c.rule('approve'); assert.equal(c.state.phase,'ruled'); assert.equal(c.state.screen,5);
+  assert.equal(c.renderVals().settlementOn,true,'A successful verdict must trigger settlement');
+  const settle=timers.get(c._settleT); settle();
+  assert.equal(c.renderVals().settlementOn,false);
   assert.equal(c.renderVals().t.verTitle2,'已下');
   c.exportVerdict(); assert.equal(downloaded,'court-s1.json');
   const exported=JSON.parse(await exportedBlob.text());
@@ -100,11 +107,18 @@ async function main() {
   assert.equal(exported.turns.length,server.turns.length);
   c.componentWillUnmount();
 
+  const unlimited=new Court(); unlimited.closeStream();
+  unlimited.setState({sid:'s1',phase:'debating',live:{...snapshot(openings,8),rounds_left:null},feed:openings});
+  assert.equal(unlimited.hasMoreRounds(unlimited.state.live),true);
+  assert.equal(unlimited.renderVals().ruleDisabled,false);
+  unlimited.navigate(5); assert.equal(unlimited.state.phase,'recess');
+  unlimited.closeStream();
+
   const failed=new Court(); failed.setState({topic:'另一个问题',lang:'zh'});
   failed.api=async()=>{throw new Error('offline');};
   await failed.startCourt();
   assert.equal(failed.state.phase,'offline'); assert.equal(failed.renderVals().scr4Live,false);
-  assert(!failed.state.live); assert(failed.renderVals().noticeText.includes('无法连接'));
+  assert(!failed.state.live); assert(failed.renderVals().noticeText.includes('朝堂暂不可用'));
 
   const stale=new Court(); stale.setState({topic:'旧议题'}); let resolve;
   stale.api=()=>new Promise(r=>{resolve=r;}); const request=stale.startCourt();
@@ -217,6 +231,16 @@ async function main() {
   assert.equal(restore.state.paused,true); assert.equal(restore.state.feed.length,5);
   assert.equal(restore.state.activeTurn.seq,13,'Restoring a court preserves its existing route history');
   restore.closeStream();
+  const echo=turn(20,'parrot','opening',null,'con'); echo.detail={reason:'异步周报要保留紧急通道',source:'context-1',evidence:'团队跨时区'};
+  const echoCourt=new Court(); echoCourt.closeStream();
+  const echoSnapshot={...snapshot([...openings,echo]),ministers:[...snapshot(openings).ministers,{id:'parrot',stance:'con',influence:.6}]};
+  echoCourt.setState({screen:4,lang:'zh',sid:'echo',live:echoSnapshot,feed:[...openings,echo],activeTurn:echo,phase:'debating'});
+  const echoView=echoCourt.renderVals();
+  assert(echoView.graphNodes.some(n=>n.id==='parrot'&&n.speaking),'Echo stands and speaks in the actual court');
+  assert(echoView.emperorTargets.some(t=>t.value==='parrot'),'The emperor can address Echo');
+  assert(echoView.groupRows.some(t=>t.name==='应声'),'Echo joins the group chat');
+  echoCourt.animateTurn(echo,{stance:'pro'}); assert.equal(echoCourt.state.cut.id,'parrot');
+  echoCourt.closeStream();
   wall.closeStream();
   console.log('frontend OK: ordered opening/rebuttal playback, event animations, pause, decree, narrow transcript, verdict, offline, stale requests, retry recovery');
 }

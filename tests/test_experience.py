@@ -22,7 +22,7 @@ def main():
     captured = []
     sides = {"fox": "con", "rabbit": "pro", "horse": "pro", "collie": "pro",
              "raccoon": "con", "snake": "con", "fish": "undecided", "sheep": "undecided",
-             "moth": "con", "banana": "pro", "octopus": "undecided"}
+             "moth": "con", "banana": "pro", "octopus": "undecided", "parrot": "undecided"}
     argument = {"text": "先试行，再检查遗漏", "reason": "如果异步消息没有确认，紧急问题可能被漏掉，因此要保留升级通道。",
                 "source": "context-1", "evidence": "模型伪造的出处不应该进入记录"}
 

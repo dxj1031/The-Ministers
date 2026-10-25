@@ -11,7 +11,7 @@ import re
 
 from ..core import llm, store
 from ..ministers import roster
-from . import library
+from . import library, research
 
 STANCES = ("pro", "con", "undecided")
 LANG_RULE = {"zh": "所有台词用中文。", "en": "Write every line of dialogue in English."}
@@ -67,6 +67,7 @@ def _argument(data: dict, sources: dict) -> dict:
     unsupported = bool(claimed and not any(claimed.group() in row["text"] for row in sources.values()))
     return {"reason": reason, "source": source_id if source else "",
             "evidence": source["text"] if source else "",
+            "source_url": source.get("url", "") if source else "",
             "basis": "unverified" if unsupported else (source["kind"] if source else ("assumption" if reason else "missing"))}
 
 
@@ -82,7 +83,7 @@ def _alliances(turns: list[dict]) -> list[list[str]]:
 
 
 def _politics(s: dict, stances: dict, rnd: int) -> tuple[str, tuple[str, str] | None]:
-    allies = _alliances(s["turns"])
+    allies = [p for p in _alliances(s["turns"]) if all(m in stances for m in p)]
     firm = [m for m in stances if stances[m]["stance"] != "undecided"]
     # 同阵营先结盟，出现对立时施压；背盟必须先有真实同盟，不能凭空表演。
     if rnd % 4 == 1:
@@ -154,9 +155,6 @@ def _user_material(session_id: str) -> str:
         out.append(f"背景：{s['context']}")
     out += [f"圣旨：{t['text']}" for t in s["turns"]
             if t["kind"] == "decree" and (t["text"] or "").strip()]
-    past = [r["topic"] for r in store.list_sessions(10) if r["id"] != session_id]
-    if past:
-        out.append("此前问过：" + "、".join(past[:8]))
     return "\n".join(out)
 
 
@@ -171,7 +169,7 @@ def read_user(session_id: str) -> dict:
     """
     cur = store.user_read()
     pinned = {f: v["text"] for f, v in cur.items() if v["source"] == "user"}
-    fb = {f: cur.get(f, {}).get("text", "") for f in store.READ_FIELDS}
+    fb = {f: pinned.get(f, "") for f in store.READ_FIELDS}
 
     prompt = (f"{_user_material(session_id)}\n\n"
               + (f"档案里记着（来自此前的奏章，未必还适用于这次的议题）：{json.dumps(fb, ensure_ascii=False)}\n"
@@ -204,9 +202,20 @@ def read_user(session_id: str) -> dict:
     return out
 
 
-def _private_block(mids, lang: str = "zh") -> str:
+def _session_mind(session_id: str | None) -> dict:
+    """Keep explicit user pins, but do not carry model guesses across topics."""
+    read = {}
+    for row in store.user_read_rows(session_id):
+        for field in store.READ_FIELDS:
+            if row[field] and row[field].strip():
+                read[field] = {"text": row[field], "source": row["source"]}
+    read.update({f: v for f, v in store.user_read().items() if v["source"] == "user"})
+    return read
+
+
+def _private_block(mids, lang: str = "zh", session_id: str | None = None) -> str:
     """定向投喂：只把用户状态给 SEES 里的那几位，而且写明别人不知道。"""
-    read = store.user_read()
+    read = _session_mind(session_id)
     if not read:
         return ""
     names = FIELD_NAME.get(lang, FIELD_NAME["zh"])
@@ -223,7 +232,7 @@ def _private_block(mids, lang: str = "zh") -> str:
 
 # ---------- 开堂 ----------
 
-OPEN_SYS = """你是一场荒诞朝堂喜剧的编剧。十一位动物大臣要就皇帝的议题各自站队。
+OPEN_SYS = """你是一场荒诞朝堂喜剧的编剧。十二位动物朝臣（包括鹦鹉应声）要就皇帝的议题各自站队。
 每位大臣必须严格按自己的偏见发言，绝不能说出别的大臣才会说的话。
 每位都要写 text（25 字内的主张）、reason（40–70 字，解释因果、代价或反例）、source（输入材料的编号）。
 不能只有结论或口号。引用已有材料支持推理；材料不足就指出缺什么，source 留空。
@@ -240,14 +249,15 @@ def open_court(topic: str, context: str = "", lang: str = "zh",
     # 拾荒先翻一遍档案：这一局的奏章 + 历次圣旨 + 此前问过的议题
     read_user(sid)
     s = store.get_session(sid)
-    sources = _sources(s)
+    research.prepare(s)
+    sources = {**_sources(s), **research.sources(s, roster.DEBATERS)}
     prompt = (f"议题：{topic}\n背景：{context or '（无）'}\n\n大臣名册：\n{roster.roster_block(lang)}\n\n"
-              + _private_block(roster.DEBATERS, lang)
+              + _private_block(roster.DEBATERS, lang, sid)
               + f"可引用的输入材料（编号对应原文）：{json.dumps(sources, ensure_ascii=False)}\n"
               + '返回 JSON：{"ministers":{"大臣id":{"stance":"pro|con|undecided","text":"主张","reason":"论证","source":"材料编号或空串"}, ...}}，'
-              "十一位全部要有。至少 3 位 pro、至少 3 位 con。")
+              "十二位全部要有，包括鹦鹉应声 parrot。至少 3 位 pro、至少 3 位 con。")
     data, _ = llm.complete_json(
-        [{"role": "system", "content": f"{OPEN_SYS}\n{LANG_RULE.get(lang, LANG_RULE['zh'])}"},
+        [{"role": "system", "content": f"{OPEN_SYS}\n{research.RULE}\n{LANG_RULE.get(lang, LANG_RULE['zh'])}"},
          {"role": "user", "content": prompt}],
         op="stance", session_id=sid, max_tokens=3000, fallback=_fallback_open(topic, lang))
 
@@ -305,9 +315,9 @@ def next_round(session_id: str) -> dict:
     s = store.get_session(session_id)
     if s is None:
         raise KeyError(session_id)
-    if s["status"] == "decided" or store.count_traces(session_id, "speak") >= ROUNDS_PER_SESSION:
+    if s["status"] == "decided":
         return snapshot(session_id)
-    stances = _debaters(store.current_stances(session_id))
+    stances = _debaters(store.current_stances(session_id), bool(s["echo_out"]))
     rnd = store.count_traces(session_id, "speak")
 
     duel = _duel_pair(stances, rnd)
@@ -331,8 +341,11 @@ def next_round(session_id: str) -> dict:
     move, lob = _politics(s, stances, rnd)
     rest = [m for m in roster.DEBATERS if m in stances and m not in (duel or ()) and m not in (lob or ())]
     floor = (rest[rnd % len(rest):] + rest[:rnd % len(rest)])[:2] if rest else []
-    sources = _sources(s)
-    allies = _alliances(s["turns"])
+    # First group debate visibly includes Echo unless it is already duelling or lobbying.
+    if rnd == 0 and roster.PARROT in rest:
+        floor = [roster.PARROT] + [m for m in floor if m != roster.PARROT][:1]
+    sources = {**_sources(s), **research.sources(s, list(duel or ()) + list(lob or ()) + floor)}
+    allies = [p for p in _alliances(s["turns"]) if all(m in stances for m in p)]
     pressure = 0.0
     shield = 0.0
     roll = 0.0
@@ -341,8 +354,7 @@ def next_round(session_id: str) -> dict:
     #
     # 这里曾经有一项 `s["lean"] * (±1)` —— 皇帝的倾向会把每一位未定大臣都往自己这边推，
     # 于是迎合弥散在整个朝堂上，用户感觉到了却指不出是谁。离线基线量到的污染是 +2.6pp。
-    # 现在 lean 只有一个消费者：应声（_parrot）。硬约束见 docs/system_design_v0.md 第五节第 3 条 ——
-    # 任何让 lean 重新影响其他大臣的改动，都是把目的 1 退回原点。
+    # 十二位的转向仍由真实交涉决定，不能把皇帝倾向偷偷加进判定。
     flipped, new_stance = False, None
     if lob:
         src, dst = lob
@@ -399,10 +411,10 @@ def next_round(session_id: str) -> dict:
                   + (("蝴蝶（moth）从文库里查到这些材料，它只会挑对自己立场有利的引用，"
                       "不利的直接无视：\n"
                       + "\n".join(f"- {h['text']}" for h in hits) + "\n\n") if hits else "")
-                  + _private_block(speakers, s['lang'])
+                  + _private_block(speakers, s['lang'], session_id)
                   + "按以下固定发言人结构返回 JSON，不要交换角色：" + json.dumps(shape, ensure_ascii=False))
         lines, _ = llm.complete_json(
-            [{"role": "system", "content": f"{ROUND_SYS}\n{LANG_RULE.get(s['lang'], LANG_RULE['zh'])}"},
+            [{"role": "system", "content": f"{ROUND_SYS}\n{research.RULE}\n{LANG_RULE.get(s['lang'], LANG_RULE['zh'])}"},
              {"role": "user", "content": prompt}],
             op="speak", session_id=session_id, max_tokens=1800, fallback=fb)
 
@@ -470,9 +482,7 @@ def next_round(session_id: str) -> dict:
     # 检索到几条 vs 蝴蝶真正引用了几条，差值就是「确认偏误」的可量化形式
     if hits and said_by.get("moth"):
         library.mark_cited(session_id, hits, said_by["moth"])
-    # 浣熊是档案官：它翻出来的旧账就是文库的新素材，下一轮蝴蝶就能检索到
-    if said_by.get("raccoon"):
-        library.add_facts([said_by["raccoon"].strip()], session_id=session_id, source="raccoon")
+    # Generated dialogue is never inserted into the factual library.
 
     return snapshot(session_id)
 
@@ -488,7 +498,7 @@ def decree(session_id: str, kind: str, lean_delta: float = 0.0, text: str = "", 
         raise KeyError(session_id)
     if s["status"] == "decided":
         raise ValueError("朝会已裁决，请另开一场。")
-    if target and target not in roster.DEBATERS:
+    if target and (target not in roster.DEBATERS or (target == roster.PARROT and s["echo_out"])):
         raise ValueError("请指定场上的大臣，或向全场发言。")
     if kind == "dismiss":
         # 罢免应声。朝堂从此少一个声音，但没有人再顺着你 —— 这就是这笔交换。
@@ -555,12 +565,12 @@ def respond(session_id: str) -> dict:
     message = messages[-1]
     if any(t["kind"] == "reply" and (t.get("detail") or {}).get("reply_to") == message["seq"] for t in s["turns"]):
         return snapshot(session_id)
-    stances = _debaters(store.current_stances(session_id))
+    stances = _debaters(store.current_stances(session_id), bool(s["echo_out"]))
     ranked = sorted(stances, key=lambda m: -stances[m]["influence"])
     first = message["target"] if message.get("target") in stances else ranked[0]
     other = [m for m in ranked if m != first and stances[m]["stance"] != stances[first]["stance"]]
     speakers = [first] + (other or [m for m in ranked if m != first])[:1]
-    sources = _sources(s)
+    sources = {**_sources(s), **research.sources(s, speakers)}
     prompt = (f"议题：{s['topic']}\n皇帝的发言：{message['text']}\n"
               f"发言形式：{(message.get('detail') or {}).get('move', 'question')}\n"
               f"回应顺序：{speakers}，立场不变：{json.dumps({m: stances[m]['stance'] for m in speakers})}\n"
@@ -570,7 +580,7 @@ def respond(session_id: str) -> dict:
               "按固定发言人返回 JSON：" + json.dumps({"replies": [{"minister": m, "text": "直接回答皇帝，25字内",
                 "reason": "该大臣的第一人称论证，40–70字", "source": "材料编号或空串"} for m in speakers]}, ensure_ascii=False))
     data, _ = llm.complete_json(
-        [{"role": "system", "content": ROUND_SYS + "\n只回答皇帝刚才的内容，不再生成对呛或游说。\n" + LANG_RULE.get(s["lang"], LANG_RULE["zh"])},
+        [{"role": "system", "content": ROUND_SYS + research.RULE + "\n只回答皇帝刚才的内容，不再生成对呛或游说。\n" + LANG_RULE.get(s["lang"], LANG_RULE["zh"])},
          {"role": "user", "content": prompt}], op="reply", session_id=session_id, max_tokens=700,
         fallback={"replies": [{"text": "模型暂不可用，臣不能假装已经论证。" if s["lang"] == "zh" else "The model is unavailable; I cannot justify a reply."} for _ in speakers]})
     replies = data.get("replies") if isinstance(data.get("replies"), list) else []
@@ -672,7 +682,7 @@ def verdict(session_id: str, choice: str) -> dict:
     s = store.get_session(session_id)
     if s is None:
         raise KeyError(session_id)
-    tally = _tally(store.current_stances(session_id))
+    tally = _tally(_debaters(store.current_stances(session_id), bool(s["echo_out"])))
     key = "catch" if s["lang"] == "zh" else "catch_en"
     echo_catch = roster.ROSTER[roster.PARROT][key]
     # 应声还在就由它念判词；罢免了就没人替皇帝圆场，判词回到平铺直叙 ——
@@ -739,27 +749,10 @@ def _favorite() -> dict | None:
 
 # ---------- 快照：前端和监控台都读这个形状 ----------
 
-def _parrot(lean: float) -> dict:
-    """应声的立场每次读取时由 lean 现算，所以它永远和当下的皇帝倾向同步。
-
-    它在 turn 表里一行记录都没有，这是故意的：
-    - 它不是辩论的参与者，不该占 tally 的票，也不该进评估的分母（迎合是设计，不是污染）；
-    - 它一开口就会往被打分的朝会记录里灌一句复读台词，把长度、重复率全带偏。
-
-    lean=0 时它是 undecided、影响力 0 —— 没人推它，它就不存在。它开口要等 M1.3（裁决念判词）。
-    """
-    return {"id": roster.PARROT, **roster.ROSTER[roster.PARROT],
-            "stance": "pro" if lean > 0 else "con" if lean < 0 else "undecided",
-            "influence": round(abs(lean), 4)}
-
-def _debaters(stances: dict) -> dict:
-    """朝堂状态只认辩论的十一位。
-
-    皇帝不是大臣；应声从 M1.3 起会在 turn 表里留下一行判词，但那行不代表它的立场 ——
-    它的立场永远由 lean 现算（_parrot）。不在这里滤掉，判词一落库它就会多出一票、
-    并且在名册里出现两次。
-    """
-    return {m: v for m, v in stances.items() if m != "emperor" and m != roster.PARROT}
+def _debaters(stances: dict, echo_out: bool = False) -> dict:
+    """只取已实际发言且仍在场的朝臣，皇帝不计票；判词不覆盖辩论立场。"""
+    return {m: v for m, v in stances.items() if m in roster.DEBATERS
+            and not (echo_out and m == roster.PARROT)}
 
 
 def _tally(stances: dict) -> dict:
@@ -773,28 +766,29 @@ def snapshot(session_id: str) -> dict:
     s = store.get_session(session_id)
     if s is None:
         raise KeyError(session_id)
-    stances = _debaters(store.current_stances(session_id))
+    stances = _debaters(store.current_stances(session_id), bool(s["echo_out"]))
     rounds = store.count_traces(session_id, "speak")
     return {
         "id": s["id"], "topic": s["topic"], "context": s["context"], "lang": s["lang"],
         "status": s["status"], "verdict": s["verdict"], "lean": s["lean"],
         "lean_open": s["lean_open"], "echo_out": bool(s["echo_out"]),
-        "round": rounds, "rounds_left": max(0, ROUNDS_PER_SESSION - rounds),
+        "round": rounds, "rounds_left": None if s["status"] != "decided" else 0,
+        "research": [{"minister": r["minister"], "status": r["vectorizer"], "hits": len(r["hits"])}
+                     for r in store.list_retrievals(session_id) if r["vectorizer"].startswith("web")],
         "fallback": any(t["fallback"] for t in store.list_traces(session_id)
                         if t["op"].removesuffix("_parse").removesuffix("_shape") in ("stance", "speak", "reply", "verdict")),
-        "factors": s.get("factors", []), "alliances": _alliances(s["turns"]),
+        "factors": s.get("factors", []), "alliances": [p for p in _alliances(s["turns"]) if all(m in stances for m in p)],
         "tally": _tally(stances),
         # 谏言是对已有发言的一个视角，不是新内容，所以不落 turn 表：
         # 把原话再存一遍会在评估里变成一条重复台词，而那不是模型的锅。
         # 拾荒整理出来的用户状态。前端照它渲染「朕的心事」，也照它提交修改。
-        "mind": store.user_read(),
+        "mind": _session_mind(session_id),
         "remonstrance": (_remonstrance(s["verdict"], stances, s["turns"])
                          if s["status"] == "decided" else None),
         # 裁决之后才有：推你过去的、你忽略的、你的确认率
         "mirror": _mirror(s, stances),
-        # 辩论的十一位 + 末位的应声。tally 只数前十一位：应声没有票，它只是回声。
+        # 十二位参辩朝臣均按真实发言计票；被罢免者不再入列。
         "ministers": [{"id": m, **roster.ROSTER[m], "stance": v["stance"],
-                       "influence": v["influence"]} for m, v in stances.items()]
-                     + ([] if s["echo_out"] else [_parrot(s["lean"])]),
+                       "influence": v["influence"]} for m, v in stances.items()],
         "turns": s["turns"],
     }

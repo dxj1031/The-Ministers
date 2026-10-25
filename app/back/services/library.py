@@ -82,7 +82,7 @@ def search(query: str, *, session_id: str | None = None, k: int = TOP_K,
            minister: str | None = None) -> list[dict]:
     """余弦 top-k。查询用和语料同一种向量化器，否则两边不在一个空间里。"""
     t0 = time.perf_counter()
-    rows = store.list_facts(session_id)
+    rows = [r for r in store.list_facts(session_id) if r["vec"] and r["source"] != "raccoon"]
     if not rows:
         store.add_retrieval(query, session_id=session_id, minister=minister, corpus=0,
                             latency_ms=int((time.perf_counter() - t0) * 1000))

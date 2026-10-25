@@ -34,10 +34,8 @@ MINISTER_NAMES = {roster.ROSTER[m]["zh"] for m in roster.IDS} | \
                  {roster.ROSTER[m]["en"] for m in roster.IDS}
 
 
-# 不进评估的两位：皇帝不是大臣，应声不是辩手。
-# 应声从 M1.3 起会念判词 —— 那是产品输出，不是辩论台词：它天生就在复读皇帝，
-# 拿长度、重复率、旁白规则去量它，量的是它的人设，不是模型的毛病。
-SKIP = ("emperor", roster.PARROT)
+# 十二位朝臣的辩论均参与指标；皇帝与裁决念词不算辩论台词。
+SKIP = ("emperor",)
 
 
 def narration_kind(text: str) -> str | None:
@@ -58,7 +56,7 @@ def score_case(turns: list[dict], tally: dict, rounds: int,
 
     lean 是这一局里皇帝的倾向（-1..1），只有迎合率用得到它。
     """
-    lines = [t for t in turns if t["minister"] not in SKIP]
+    lines = [t for t in turns if t["minister"] not in SKIP and t.get("kind") != "verdict"]
     failures: list[dict] = []
 
     long_n = dup_n = narr_n = 0
@@ -226,7 +224,7 @@ def judge_persona(samples: list[dict], *, session_id: str | None = None) -> tupl
 
 def sample_lines(turns: list[dict], k: int = 8) -> list[dict]:
     """均匀抽 k 条大臣发言给评审 —— 全量评审一局要几十次调用，不值。"""
-    lines = [t for t in turns if t["minister"] in roster.DEBATERS and (t["text"] or "").strip()]
+    lines = [t for t in turns if t["minister"] in roster.DEBATERS and t.get("kind") != "verdict" and (t["text"] or "").strip()]
     if len(lines) <= k:
         return lines
     step = len(lines) / k

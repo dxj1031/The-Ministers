@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 
 from .core import store, access
 from .evaluation import scorers
-from .services import court
+from .services import court, library
 
 ROOT = Path(__file__).resolve().parents[2]
 FRONT = ROOT / "app" / "front"
@@ -118,6 +118,17 @@ class OpenReq(BaseModel):
     lean_open: float = Field(default=0.0, ge=-1.0, le=1.0)
 
 
+class LibraryReq(BaseModel):
+    title: str = Field(default="User document", max_length=200)
+    text: str = Field(min_length=6, max_length=200000)
+
+
+@app.post("/api/library")
+def import_library(req: LibraryReq):
+    added = library.add_facts(library.split_sentences(req.text), source="user:" + req.title)
+    return {"added": added, "title": req.title}
+
+
 class DecreeReq(BaseModel):
     kind: str
     lean_delta: float = Field(default=0.0, ge=-1.0, le=1.0)
@@ -195,12 +206,13 @@ def court_stream(session_id: str, after: int = 0):
         try:
             snap = court.snapshot(session_id)
             seen = after
+            stream_until = snap["round"] + 1
             while True:
                 for t in snap["turns"][seen:]:
                     yield _sse("turn", t)
                 seen = len(snap["turns"])
                 yield _sse("state", snap)
-                if snap["status"] != "debating" or snap["rounds_left"] <= 0:
+                if snap["status"] != "debating" or snap["round"] >= stream_until:
                     break
                 snap = court.next_round(session_id)
             yield _sse("done", {"tally": snap["tally"], "status": snap["status"]})
