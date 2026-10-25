@@ -58,6 +58,7 @@ async function main() {
     return server;
   };
   await c.startCourt();
+  assert(c._remaining >= 1200 && c._remaining <= 2800,'Speech pacing must stay short');
   assert.equal(c.state.feed.length,1,'Opening statements must play one at a time');
   assert.equal(c.renderVals().duelLine,openings[0].text);
   assert.equal(c.renderVals().t.verTitle1,'请下');
@@ -207,7 +208,7 @@ async function main() {
   const focused=wall.renderVals();
   assert.equal(focused.compactCourtOn,true);
   assert.equal(focused.railOn,false,'Long logs and text timelines stay out of the focus view');
-  assert(focused.chatRows.every(q=>!('reason' in q) && q.text.length<=43),'Chat only carries a concise claim until expanded');
+  assert(focused.chatRows.every(q=>'reason' in q && 'sourceUrl' in q),'Chat exposes reasons and source links without expansion');
   assert.equal(focused.graphNodes.find(n=>n.id==='rabbit').left,'85%','A minister visibly changes camps');
   assert(!focused.graphEdges.some(e=>e.dash==='0'),'The former alliance line must disappear after betrayal');
   assert(focused.graphEdges.some(e=>e.dash==='2 7'),'The broken alliance remains traceable');
@@ -242,6 +243,14 @@ async function main() {
   echoCourt.animateTurn(echo,{stance:'pro'}); assert.equal(echoCourt.state.cut.id,'parrot');
   echo.detail.basis='public_reaction';
   assert(echoCourt.renderVals().transcript.some(q=>q.basis.includes('公开讨论摘要')));
+  echo.detail.source_url='https://example.org/discussion';
+  const citedChat=echoCourt.renderVals().chatRows.find(q=>q.seq===20);
+  assert.equal(citedChat.reason,echo.detail.reason,'Reason must be immediately visible beside the speech');
+  assert.equal(citedChat.sourceUrl,echo.detail.source_url);
+  assert(citedChat.sourceLabel.includes('example.org'));
+  assert.equal(citedChat.localEvidence,'');
+  echo.detail.basis='unverified';
+  assert(echoCourt.renderVals().chatRows.find(q=>q.seq===20).warning.includes('仍需核实'));
   echoCourt.closeStream();
   wall.closeStream();
   console.log('frontend OK: ordered opening/rebuttal playback, event animations, pause, decree, narrow transcript, verdict, offline, stale requests, retry recovery');

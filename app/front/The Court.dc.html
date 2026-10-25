@@ -189,6 +189,10 @@
   .mm-chat-message { min-width:0; flex:1; }
   .mm-chat-message b { font:600 11px/1.3 sans-serif; color:#c4ae86; }.mm-chat-message small {font:10px sans-serif;color:#988c9e;margin-left:6px;}
   .mm-chat-message p { margin:5px 0 0; color:#eee7ee; font:13px/1.5 sans-serif; overflow-wrap:anywhere; }
+  .mm-chat-open { all:unset; cursor:pointer; }
+  .mm-chat-message .mm-chat-reason { color:#c8bbc9; font-size:12px; }
+  .mm-chat-evidence { margin:8px 0; padding-left:9px; border-left:2px solid #b2a181; color:#afa5b5; font:11px/1.5 sans-serif; overflow-wrap:anywhere; }
+  .mm-chat-source { display:inline-block; margin-top:5px; color:#dfc795; font:12px/1.5 sans-serif; text-decoration:underline; overflow-wrap:anywhere; }
   .mm-route-dialog { width:min(560px,90vw); max-height:80dvh; box-sizing:border-box; padding:24px; border:2px solid #aa9470; border-radius:18px; background:#2b2733; color:#f1ede4; overflow-y:auto; }
   .mm-route-dialog::backdrop { background:rgba(15,12,19,.78); }
   .mm-route-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }.mm-route-head h2 {margin:0;font:22px sans-serif;}
@@ -605,7 +609,20 @@
           <h2>{{ chatTitle }}</h2>
           <div class="mm-chat-body" role="log" aria-label="{{ chatTitle }}">
             <sc-if value="{{ chatEmpty }}"><p>{{ chatEmptyLabel }}</p></sc-if>
-            <sc-for list="{{ chatRows }}" as="q"><button class="mm-chat-row {{ q.current }}" onClick="{{ q.open }}" aria-label="{{ q.routeLabel }}"><span class="mm-chat-avatar">{{ q.head }}</span><span class="mm-chat-message"><b>{{ q.name }}</b><small>{{ q.target }} {{ q.action }}</small><p>{{ q.text }}</p></span><span class="mm-chat-expand" aria-hidden="true">↗</span></button></sc-for>
+            <sc-for list="{{ chatRows }}" as="q">
+              <article class="mm-chat-row {{ q.current }}">
+                <span class="mm-chat-avatar">{{ q.head }}</span>
+                <div class="mm-chat-message">
+                  <button class="mm-chat-open" onClick="{{ q.open }}" aria-label="{{ q.routeLabel }}"><b>{{ q.name }} ↗</b></button><small>{{ q.target }} {{ q.action }}</small>
+                  <p>{{ q.text }}</p>
+                  <sc-if value="{{ q.reason }}"><p class="mm-chat-reason">{{ q.reasonLabel }}{{ q.reason }}</p></sc-if>
+                  <sc-if value="{{ q.evidence }}"><blockquote class="mm-chat-evidence">{{ q.evidence }}</blockquote></sc-if>
+                  <sc-if value="{{ q.sourceUrl }}"><a class="mm-chat-source" href="{{ q.sourceUrl }}" target="_blank" rel="noopener noreferrer">{{ q.sourceLabel }} ↗</a></sc-if>
+                  <sc-if value="{{ q.localEvidence }}"><p class="mm-chat-reason">{{ q.localEvidence }}</p></sc-if>
+                  <sc-if value="{{ q.warning }}"><p class="mm-chat-reason">{{ q.warning }}</p></sc-if>
+                </div>
+              </article>
+            </sc-for>
           </div>
         </section>
       </div>
@@ -1005,8 +1022,8 @@ class Component extends DCLogic {
       }
       this.setState(st => ({ activeTurn: turn, feed: st.feed.concat(turn) }));
       this.animateTurn(turn, previous);
-      const detail = turn.detail || {};
-      this.scheduleLine(Math.max(5000, Math.min(16000, (turn.text.length + (detail.reason || '').length) * 150)));
+      // Reasons and citations remain visible in chat; do not hold the next speaker for them.
+      this.scheduleLine(Math.max(1200, Math.min(2800, turn.text.length * 35)));
       return;
     }
     if (this._loading || !this.state.live) return;
@@ -1669,7 +1686,14 @@ class Component extends DCLogic {
       const d=t.detail || {};
       return {seq:t.seq, name:name(t.minister), head:t.minister === 'emperor' ? '😾' : ((meta[t.minister] || {}).head || '·'),
         routeLabel:(zh ? '展开路由：' : 'Open route: ') + name(t.minister),
-        text:t.text.length > 42 ? t.text.slice(0,42) + '…' : t.text,
+        text:t.text, reason:d.reason || '', reasonLabel:zh ? '理由：' : 'Reason: ',
+        evidence:d.evidence ? d.evidence.slice(0,220) + (d.evidence.length > 220 ? '…' : '') : '',
+        sourceUrl:/^https?:\/\//i.test(d.source_url || '') ? d.source_url : '',
+        sourceLabel:(zh ? '来源：' : 'Source: ') + (d.source_url || '').replace(/^https?:\/\//i,'').split('/')[0],
+        localEvidence:d.evidence && !d.source_url ? (zh ? (d.basis === 'user_library' ? '依据：用户文库（无公开外链）' : '依据：本次输入（无公开外链）') : (d.basis === 'user_library' ? 'Source: user library (no public URL)' : 'Source: your input (no public URL)')) : '',
+        warning:t.minister === 'emperor' ? '' : (d.basis === 'unverified'
+          ? (zh ? '⚠ 引用不足以支持部分说法，仍需核实。' : '⚠ Parts of this claim are not supported by the source.')
+          : (!d.source ? (zh ? '未提供引用依据；这是角色推测。' : 'No cited evidence; this is the character’s inference.') : '')),
         target:t.target && (meta[t.target] || t.target === 'emperor') ? '→ ' + name(t.target) : '',
         current:t.seq === active.seq ? 'is-current' : '',
         open:() => this.openRoute(t.seq), action:d.outcome && d.outcome !== 'offer' ? (zh ? {allied:'结盟',resisted:'抵抗',flipped:'转向',defected:'背盟'} : {allied:'ALLIED',resisted:'HELD',flipped:'SWITCH',defected:'DEFECT'})[d.outcome] || '' : ''};
