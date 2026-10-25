@@ -52,7 +52,9 @@ def conn():
 # 后加的列。CREATE TABLE IF NOT EXISTS 不会动已经存在的表，所以老库要单独补。
 # ponytail: 够用的迁移就是这一张表，不上 alembic —— 真换 Postgres 时再说。
 LATE_COLUMNS = {
+    "turn": [("detail", "TEXT NOT NULL DEFAULT '{}'")],
     "court_session": [
+        ("factors", "TEXT NOT NULL DEFAULT '[]'"),
         ("lean_open", "REAL NOT NULL DEFAULT 0"),
         ("verdict_aligned", "INTEGER"),
         ("echo_out", "INTEGER NOT NULL DEFAULT 0"),
@@ -132,8 +134,17 @@ def get_session(session_id: str) -> dict | None:
         if row is None:
             return None
         s = dict(row)
+        s["factors"] = json.loads(s.get("factors") or "[]")
         s["turns"] = _rows(c.execute("SELECT * FROM turn WHERE session_id=? ORDER BY seq", (session_id,)))
+        for t in s["turns"]:
+            t["detail"] = json.loads(t.get("detail") or "{}")
         return s
+
+
+def set_factors(session_id: str, factors: list[dict]) -> None:
+    with conn() as c:
+        c.execute("UPDATE court_session SET factors=? WHERE id=?",
+                  (json.dumps(factors, ensure_ascii=False), session_id))
 
 
 def list_sessions(limit: int = 50) -> list[dict]:
@@ -152,14 +163,16 @@ def list_sessions(limit: int = 50) -> list[dict]:
 # ---------- 发言 ----------
 
 def add_turn(session_id: str, minister: str, kind: str, stance: str,
-             text: str, influence: float = 0.0, target: str | None = None) -> int:
+             text: str, influence: float = 0.0, target: str | None = None,
+             detail: dict | None = None) -> int:
     with conn() as c:
         seq = c.execute("SELECT COALESCE(MAX(seq), 0) + 1 FROM turn WHERE session_id=?",
                         (session_id,)).fetchone()[0]
         cur = c.execute(
-            """INSERT INTO turn (session_id, seq, minister, kind, stance, influence, text, target, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
-            (session_id, seq, minister, kind, stance, influence, text, target, now()),
+            """INSERT INTO turn (session_id, seq, minister, kind, stance, influence, text, target, detail, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (session_id, seq, minister, kind, stance, influence, text, target,
+             json.dumps(detail or {}, ensure_ascii=False), now()),
         )
         return cur.lastrowid
 

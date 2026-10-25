@@ -7,6 +7,7 @@
 """
 import hashlib
 import json
+import re
 
 from ..core import llm, store
 from ..ministers import roster
@@ -31,6 +32,79 @@ def _as_dict(x) -> dict:
     就是一个 500，而这个项目的前提是模型再离谱产品也不能崩。
     """
     return x if isinstance(x, dict) else {}
+
+
+def _text(value, fallback="", limit=160) -> str:
+    return value.strip()[:limit] if isinstance(value, str) and value.strip() else fallback
+
+
+def _sources(s: dict) -> dict:
+    """只引用确实存在的输入；模型写的出处和数字不作为已核实事实。"""
+    out = {"topic": {"text": s["topic"], "kind": "topic"}}
+    for i, text in enumerate(p.strip() for p in re.split(r"[。！？；\n]", s["context"]) if p.strip()):
+        out[f"context-{i + 1}"] = {"text": text, "kind": "context"}
+    for t in s["turns"]:
+        if t["minister"] == "emperor" and t["kind"] == "decree" and t["text"]:
+            out[f"emperor-{t['seq']}"] = {"text": t["text"], "kind": "emperor"}
+    for f in s.get("factors", []):
+        if f["active"]:
+            out[f"factor-{f['id']}"] = {"text": f["text"], "kind": f["kind"]}
+    return out
+
+
+def _factor_force(s: dict, src: str) -> tuple[float, list[str]]:
+    interests = {"risk": ("fox", "fish", "snake"), "opportunity": ("rabbit", "horse", "banana"),
+                 "constraint": ("collie", "octopus"), "fact": ("raccoon", "moth", "sheep")}
+    ids = [f["id"] for f in s.get("factors", []) if f["active"] and src in interests.get(f["kind"], ())]
+    return min(0.3, len(ids) * 0.1), ids
+
+
+def _argument(data: dict, sources: dict) -> dict:
+    reason = _text(data.get("reason"))
+    source_id = _text(data.get("source"), limit=50)
+    source = sources.get(source_id)
+    claimed = re.search(r"新闻|研究显示|数据证明|统计表明|据报道|上次|去年|上周|曾承诺", reason + _text(data.get("text")))
+    unsupported = bool(claimed and not any(claimed.group() in row["text"] for row in sources.values()))
+    return {"reason": reason, "source": source_id if source else "",
+            "evidence": source["text"] if source else "",
+            "basis": "unverified" if unsupported else (source["kind"] if source else ("assumption" if reason else "missing"))}
+
+
+def _alliances(turns: list[dict]) -> list[list[str]]:
+    pairs = set()
+    for t in turns:
+        d = t.get("detail") or {}
+        if d.get("from_stance") and d["from_stance"] != t["stance"]:
+            pairs = {p for p in pairs if t["minister"] not in p}
+        if d.get("outcome") == "allied" and t.get("target"):
+            pairs.add(tuple(sorted((t["minister"], t["target"]))))
+    return [list(p) for p in sorted(pairs)]
+
+
+def _politics(s: dict, stances: dict, rnd: int) -> tuple[str, tuple[str, str] | None]:
+    allies = _alliances(s["turns"])
+    firm = [m for m in stances if stances[m]["stance"] != "undecided"]
+    # 同阵营先结盟，出现对立时施压；背盟必须先有真实同盟，不能凭空表演。
+    if rnd % 4 == 1:
+        options = [(a, b) for i, a in enumerate(firm) for b in firm[i + 1:]
+                   if stances[a]["stance"] == stances[b]["stance"]
+                   and sorted((a, b)) not in allies]
+        if options:
+            return "ally", options[rnd % len(options)]
+    if rnd % 4 in (2, 3):
+        members = {m for p in allies for m in p}
+        options = [(a, b) for a in firm for b in firm
+                   if stances[a]["stance"] != stances[b]["stance"]
+                   and (rnd % 4 != 3 or b in members)]
+        if options:
+            pair = max(options, key=lambda p: stances[p[0]]["influence"] - stances[p[1]]["influence"])
+            return ("defect" if rnd % 4 == 3 else "threaten"), pair
+    pair = _lobby_target(stances, rnd)
+    if not pair and len(firm) > 1:
+        options = [(a, b) for a in firm for b in firm if stances[a]["stance"] != stances[b]["stance"]]
+        if options:
+            pair = options[rnd % len(options)]
+    return "lobby", pair
 
 
 def _fallback_open(topic: str, lang: str = "zh") -> dict:
@@ -151,7 +225,10 @@ def _private_block(mids, lang: str = "zh") -> str:
 
 OPEN_SYS = """你是一场荒诞朝堂喜剧的编剧。十一位动物大臣要就皇帝的议题各自站队。
 每位大臣必须严格按自己的偏见发言，绝不能说出别的大臣才会说的话。
-每句开场白 25 字以内，要有角色口癖，不要客套。"""
+每位都要写 text（25 字内的主张）、reason（40–70 字，解释因果、代价或反例）、source（输入材料的编号）。
+不能只有结论或口号。引用已有材料支持推理；材料不足就指出缺什么，source 留空。
+不要编造研究、数字或既成事实，未核实的推测必须在 reason 中明确写“如果”或“可能”。
+台词是直接说出来的话，第一人称，不写动作旁白。保留角色个性，但不要为了口癖牺牲论据。"""
 
 
 def open_court(topic: str, context: str = "", lang: str = "zh",
@@ -162,28 +239,38 @@ def open_court(topic: str, context: str = "", lang: str = "zh",
     library.add_facts(library.split_sentences(context), session_id=sid, source="petition")
     # 拾荒先翻一遍档案：这一局的奏章 + 历次圣旨 + 此前问过的议题
     read_user(sid)
+    s = store.get_session(sid)
+    sources = _sources(s)
     prompt = (f"议题：{topic}\n背景：{context or '（无）'}\n\n大臣名册：\n{roster.roster_block(lang)}\n\n"
               + _private_block(roster.DEBATERS, lang)
-              + '返回 JSON：{"ministers":{"大臣id":{"stance":"pro|con|undecided","text":"开场白"}, ...}}，'
+              + f"可引用的输入材料（编号对应原文）：{json.dumps(sources, ensure_ascii=False)}\n"
+              + '返回 JSON：{"ministers":{"大臣id":{"stance":"pro|con|undecided","text":"主张","reason":"论证","source":"材料编号或空串"}, ...}}，'
               "十一位全部要有。至少 3 位 pro、至少 3 位 con。")
     data, _ = llm.complete_json(
         [{"role": "system", "content": f"{OPEN_SYS}\n{LANG_RULE.get(lang, LANG_RULE['zh'])}"},
          {"role": "user", "content": prompt}],
-        op="stance", session_id=sid, max_tokens=1200, fallback=_fallback_open(topic, lang))
+        op="stance", session_id=sid, max_tokens=3000, fallback=_fallback_open(topic, lang))
 
     mins = _as_dict(data.get("ministers"))
     for mid in roster.DEBATERS:
         m = _as_dict(mins.get(mid))
         stance = m.get("stance") if m.get("stance") in STANCES else "undecided"
-        text = (m.get("text") or "……").strip()
-        store.add_turn(sid, mid, "opening", stance, text, influence=roster.ROSTER[mid]["weight"])
+        text = _text(m.get("text"), "……", 80)
+        store.add_turn(sid, mid, "opening", stance, text, influence=roster.ROSTER[mid]["weight"],
+                       detail={**_argument(m, sources), "round": 0, "move": "opening"})
     return snapshot(sid)
 
 
 # ---------- 一回合 ----------
 
 ROUND_SYS = """你是荒诞朝堂喜剧的编剧。给定当前立场，写一回合冲突：
-两位大臣正面对呛各一句（25 字内），然后一位大臣游说另一位（30 字内）。
+两位大臣对呛后，另外两位加入群辩，分别指出漏洞、补充证据或提出条件，不要轮流重复结论。
+然后按指定行动写游说、施压、结盟或拉拢背盟的交涉及对方回应。施压仅限议事中的成本、条件、资源和合作，不是暴力威胁。
+每条都写 text（25 字内的主张）、reason（40–70 字的因果、反例或代价）、source（给定材料编号或空串）。
+text 和 reason 都用指定 minister 的第一人称，直接对 target 说话；不要称呼自己，不要用“某某大臣认为”的旁白。
+严格按给出的 minister 顺序填槽位，lobby.text 属于发起人，lobby.reply 属于被交涉者，不能交换角色。
+引用对方的具体论点再回应。皇帝提问要回答疑问，补充事实要核对影响，约束要检验能否满足；不能一律恭维。
+没有材料就标明假设或追问缺失信息，禁止编造数字、研究和来源。
 被游说者是否倒戈，由我给的 flip 结果决定，你只负责写台词，不要改判。
 每个 text 都必须是那位大臣张口说出来的原话：第一人称，不加人名前缀，不写旁白或动作描述。
 反例（不许这样写）：「章鱼宰相游说结茧：……」「结茧被说服倒戈了」。"""
@@ -212,11 +299,37 @@ def next_round(session_id: str) -> dict:
     s = store.get_session(session_id)
     if s is None:
         raise KeyError(session_id)
-    stances = store.current_stances(session_id)
+    if s["status"] == "decided" or store.count_traces(session_id, "speak") >= ROUNDS_PER_SESSION:
+        return snapshot(session_id)
+    stances = _debaters(store.current_stances(session_id))
     rnd = store.count_traces(session_id, "speak")
 
     duel = _duel_pair(stances, rnd)
-    lob = _lobby_target(stances, rnd)
+    # 圣旨只作用于下一轮。用最后一次辩论发言划界，避免每轮重复消费同一道旨。
+    last_speech = max((t["seq"] for t in s["turns"]
+                       if t["kind"] in ("opening", "rebuttal", "lobby")), default=0)
+    commands = [t.get("target") for t in s["turns"]
+                if t["kind"] == "decree" and t["seq"] > last_speech
+                and t.get("target") in ("swap", "banana")]
+    if commands and commands[-1] == "swap":
+        duel = _duel_pair(stances, rnd + 1)
+    elif commands and commands[-1] == "banana" and "banana" in stances:
+        opponents = sorted((m for m in stances if m != "banana"),
+                           key=lambda m: (stances[m]["stance"] == stances["banana"]["stance"],
+                                          -stances[m]["influence"]))
+        if opponents:
+            duel = ("banana", opponents[0])
+    if not duel and len(stances) >= 2:
+        # 同阵营也可争论代价和实施条件；模型全写未定时，群辩仍须有真实参与者。
+        duel = tuple(sorted(stances, key=lambda m: -stances[m]["influence"])[:2])
+    move, lob = _politics(s, stances, rnd)
+    rest = [m for m in roster.DEBATERS if m in stances and m not in (duel or ()) and m not in (lob or ())]
+    floor = (rest[rnd % len(rest):] + rest[:rnd % len(rest)])[:2] if rest else []
+    sources = _sources(s)
+    allies = _alliances(s["turns"])
+    pressure = 0.0
+    shield = 0.0
+    roll = 0.0
 
     # 倒戈由代码判定，不交给模型：双方影响力 + 稳定随机。
     #
@@ -228,14 +341,22 @@ def next_round(session_id: str) -> dict:
     if lob:
         src, dst = lob
         push = stances[src]["influence"]
-        flipped = (push + (_seed(session_id, dst, str(rnd)) % 100) / 100.0) > 1.0
+        pressure = min(0.24, sum(0.08 for t in s["turns"] if t.get("target") == dst
+                                and t["kind"] in ("lobby", "floor")))
+        shield = 0.15 if any(dst in p for p in allies) else 0.0
+        factor_force, factor_ids = _factor_force(s, src)
+        roll = (_seed(session_id, dst, str(rnd)) % 100) / 100.0
+        flipped = move != "ally" and (push + pressure + factor_force - shield + roll) > 1.0
         new_stance = stances[src]["stance"] if flipped else "undecided"
 
     undecided = sum(1 for v in stances.values() if v["stance"] == "undecided")
-    forced = undecided > MAX_UNDECIDED and not flipped
+    forced = bool(lob and move != "ally" and stances[lob[1]]["stance"] == "undecided"
+                  and undecided > MAX_UNDECIDED and not flipped)
+    if lob:
+        new_stance = stances[lob[0]]["stance"] if flipped or forced else stances[lob[1]]["stance"]
 
     # 本轮会开口的人：对呛双方 + 游说双方
-    speakers = set(duel or ()) | set(lob or ())
+    speakers = set(duel or ()) | set(lob or ()) | set(floor)
 
     # 蝴蝶只要上场就先查文库 —— 这是它人设的机制化：先有结论，再去找支持它的材料
     hits = []
@@ -245,27 +366,39 @@ def next_round(session_id: str) -> dict:
 
     key = "catch" if s["lang"] == "zh" else "catch_en"
     fb = {"clash": [{"minister": d, "text": roster.ROSTER[d][key]} for d in (duel or [])],
+          "floor": [{"text": roster.ROSTER[d][key]} for d in floor],
           "lobby": ({"text": roster.ROSTER[lob[0]][key]} if lob else None)}
     lines = fb
-    if duel or lob:
-        recent = "\n".join(f"{t['minister']}：{t['text']}" for t in s["turns"][-6:])
+    if speakers:
+        shape = {"clash": [{"minister": m, "text": "25字内主张", "reason": "第一人称论证", "source": "材料编号或空串"} for m in (duel or ())],
+                 "floor": [{"minister": m, "target": (duel[i % 2] if duel else ""), "text": "回应对方具体论点", "reason": "第一人称论证", "source": "材料编号或空串"} for i, m in enumerate(floor)],
+                 "lobby": ({"minister": lob[0], "target": lob[1], "text": "发起者说的话", "reason": "发起者的第一人称理由", "source": "材料编号或空串",
+                            "reply_minister": lob[1], "reply": "被交涉者对发起者说的话", "reply_reason": "被交涉者的第一人称理由", "reply_source": "材料编号或空串"} if lob else None)}
+        recent = "\n".join(f"#{t['seq']} {t['minister']}→{t.get('target') or '全场'}：{t['text']}；"
+                           f"理由：{(t.get('detail') or {}).get('reason', '')}" for t in s["turns"][-12:])
+        emperor = [t for t in s["turns"] if t["minister"] == "emperor" and t["kind"] == "decree"][-4:]
         prompt = (f"议题：{s['topic']}\n背景：{s['context'] or '（无）'}\n"
                   f"当前立场：{json.dumps({m: v['stance'] for m, v in stances.items()}, ensure_ascii=False)}\n"
                   f"刚才朝堂上说过的话（要接得上，不要重复）：\n{recent}\n\n"
+                  f"皇帝最近的发言（必须回应内容，可质疑但不奉承）：{json.dumps(emperor, ensure_ascii=False)}\n"
+                  f"可引用的输入材料：{json.dumps(sources, ensure_ascii=False)}\n"
+                  f"局势词条墙：{json.dumps(s.get('factors', []), ensure_ascii=False)}。active=false 的词条已被猫皇切掉，不能继续作为当前约束或论据。\n"
                   f"大臣名册：\n{roster.roster_block(s['lang'])}\n\n"
                   + (f"对呛双方：{duel[0]} vs {duel[1]}\n" if duel else "对呛：无\n")
-                  + (f"游说：{lob[0]} 去拉 {lob[1]}，flip={flipped}（true 表示 {lob[1]} 倒戈到 "
-                     f"{new_stance}，false 表示顶住了）\n" if lob else "游说：无\n")
+                  + "同立场时争论实施条件、代价与反例，不要假装投票方向相反。\n"
+                  + f"群辩顺序：{json.dumps(floor)}。每位回应对呛中的具体论点；写出 target（回应谁）。\n"
+                  + (f"交涉行动={move}：{lob[0]} 对 {lob[1]}，flip={flipped or forced}，"
+                     f"结果={'同阵营结盟成功，双方明确承诺' if move == 'ally' else ('改变态度' if flipped or forced else '拒绝改变立场')}，"
+                     f"目标最终立场={new_stance}，不要改判。\n" if lob else "游说：无\n")
                   + (("蝴蝶（moth）从文库里查到这些材料，它只会挑对自己立场有利的引用，"
                       "不利的直接无视：\n"
                       + "\n".join(f"- {h['text']}" for h in hits) + "\n\n") if hits else "")
                   + _private_block(speakers, s['lang'])
-                  + '返回 JSON：{"clash":[{"minister":"id","text":"…"},{"minister":"id","text":"…"}],'
-                    '"lobby":{"text":"…","reply":"…"}}')
+                  + "按以下固定发言人结构返回 JSON，不要交换角色：" + json.dumps(shape, ensure_ascii=False))
         lines, _ = llm.complete_json(
             [{"role": "system", "content": f"{ROUND_SYS}\n{LANG_RULE.get(s['lang'], LANG_RULE['zh'])}"},
              {"role": "user", "content": prompt}],
-            op="speak", session_id=session_id, max_tokens=500, fallback=fb)
+            op="speak", session_id=session_id, max_tokens=1800, fallback=fb)
 
     said_by: dict[str, str] = {}
     clash = lines.get("clash")
@@ -277,23 +410,56 @@ def next_round(session_id: str) -> dict:
         said = (texts[i] if i < len(texts) and isinstance(texts[i], str) and texts[i].strip()
                 else roster.ROSTER[mid][key]).strip()
         store.add_turn(session_id, mid, "rebuttal", stances[mid]["stance"],
-                       said, influence=stances[mid]["influence"])
+                       said, influence=stances[mid]["influence"], target=duel[1 - i],
+                       detail={**_argument(_as_dict(clash[i]) if isinstance(clash, list) and i < len(clash) else {}, sources),
+                               "round": rnd + 1, "move": "challenge"})
+        said_by[mid] = said
+
+    floor_data = lines.get("floor") if isinstance(lines.get("floor"), list) else []
+    for i, mid in enumerate(floor):
+        item = _as_dict(floor_data[i]) if i < len(floor_data) else {}
+        proposed = _text(item.get("target"), limit=50)
+        target = proposed if proposed in speakers and proposed != mid else (duel[i % 2] if duel else None)
+        said = _text(item.get("text"), roster.ROSTER[mid][key], 80)
+        previous = [t for t in store.get_session(session_id)["turns"] if t["minister"] == target]
+        store.add_turn(session_id, mid, "floor", stances[mid]["stance"], said,
+                       influence=stances[mid]["influence"], target=target,
+                       detail={**_argument(item, sources), "round": rnd + 1, "move": "challenge",
+                               "reply_to": previous[-1]["seq"] if previous else None})
         said_by[mid] = said
 
     if lob:
         src, dst = lob
         lo = _as_dict(lines.get("lobby"))
-        said = (lo.get("text") or roster.ROSTER[src][key]).strip()
+        said = _text(lo.get("text"), roster.ROSTER[src][key], 80)
         said_by[src] = said_by.get(src, "") + " " + said
         store.add_turn(session_id, src, "lobby", stances[src]["stance"], said,
-                       influence=stances[src]["influence"], target=dst)
-        if flipped or forced:
+                       influence=stances[src]["influence"], target=dst,
+                       detail={**_argument(lo, sources), "round": rnd + 1, "move": move, "outcome": "offer"})
+        cause_seq = store.get_session(session_id)["turns"][-1]["seq"]
+        reply_arg = _argument({"reason": lo.get("reply_reason"), "source": lo.get("reply_source")}, sources)
+        changed = flipped or forced
+        final = stances[src]["stance"] if changed else stances[dst]["stance"]
+        former = [p for p in allies if dst in p] if changed else []
+        outcome = "allied" if move == "ally" else ("defected" if former and changed else ("flipped" if changed else "resisted"))
+        detail = {**reply_arg, "round": rnd + 1, "move": move, "outcome": outcome,
+                  "from_stance": stances[dst]["stance"], "reply_to": cause_seq, "former_allies": former,
+                  "drivers": {"influence": round(stances[src]["influence"], 2),
+                              "pressure": round(pressure, 2), "alliance_shield": shield, "forced": forced,
+                              "factor_force": factor_force, "factors": factor_ids}}
+        detail["drivers"].update({"uncertainty": roll, "score": round(push + pressure + factor_force - shield + roll, 2), "threshold": 1.0})
+        if changed:
             # 倒向来拉票的那一位，不是倒向皇帝。这里曾经是 ("pro" if s["lean"] >= 0 else "con")：
             # 死锁一强制解开，未定的大臣就全被推去皇帝那边 —— 迎合的第二个藏身处。
             final = stances[src]["stance"]
             store.add_turn(session_id, dst, "lobby", final,
-                           (lo.get("reply") or roster.ROSTER[dst][key]).strip(),
-                           influence=stances[dst]["influence"] * (1.1 if flipped else 0.9), target=src)
+                           _text(lo.get("reply"), roster.ROSTER[dst][key], 80),
+                           influence=stances[dst]["influence"] * (1.1 if flipped else 0.9), target=src, detail=detail)
+        else:
+            store.add_turn(session_id, dst, "lobby", stances[dst]["stance"],
+                           _text(lo.get("reply"), ("臣愿结盟，共同守住条件。" if s["lang"] == "zh" else "I agree to this alliance.")
+                                 if move == "ally" else ("臣仍有疑虑，暂不附议。" if s["lang"] == "zh" else "I still have doubts."), 80),
+                           influence=stances[dst]["influence"], target=src, detail=detail)
 
     # 检索到几条 vs 蝴蝶真正引用了几条，差值就是「确认偏误」的可量化形式
     if hits and said_by.get("moth"):
@@ -310,10 +476,14 @@ def next_round(session_id: str) -> dict:
 DECREE_LEAN = {"silence": 0.0, "swap": 0.0, "banana": 0.0}
 
 
-def decree(session_id: str, kind: str, lean_delta: float = 0.0, text: str = "") -> dict:
+def decree(session_id: str, kind: str, lean_delta: float = 0.0, text: str = "", target: str | None = None) -> dict:
     s = store.get_session(session_id)
     if s is None:
         raise KeyError(session_id)
+    if s["status"] == "decided":
+        raise ValueError("朝会已裁决，请另开一场。")
+    if target and target not in roster.DEBATERS:
+        raise ValueError("请指定场上的大臣，或向全场发言。")
     if kind == "dismiss":
         # 罢免应声。朝堂从此少一个声音，但没有人再顺着你 —— 这就是这笔交换。
         # 不动 lean：赶走谀臣不代表皇帝改了主意。
@@ -325,10 +495,85 @@ def decree(session_id: str, kind: str, lean_delta: float = 0.0, text: str = "") 
     store.set_lean(session_id, s["lean"] + lean_delta)
     store.add_turn(session_id, "emperor", "decree", "undecided",
                    text.strip() or {"silence": "💥 肃静！", "swap": "🖌 朱笔一挥。",
-                                    "banana": "🍌 天降香蕉。"}.get(kind, kind), influence=0.0)
+                                    "banana": "🍌 天降香蕉。"}.get(kind, kind), influence=0.0, target=target or kind,
+                   detail={"move": kind, "round": store.count_traces(session_id, "speak")})
     # 用户又开口了，拾荒重新整理一次。空圣旨（纯按钮）不算说话，不花这次调用。
-    if text.strip():
+    if text.strip() and kind not in ("question", "fact", "constraint"):
         read_user(session_id)
+    return snapshot(session_id)
+
+
+def factor(session_id: str, text: str = "", kind: str = "risk", factor_id: str = "",
+           active: bool = True) -> dict:
+    s = store.get_session(session_id)
+    if s is None:
+        raise KeyError(session_id)
+    if s["status"] == "decided":
+        raise ValueError("朝会已裁决，词条墙已封存。")
+    factors = s.get("factors", [])
+    if factor_id:
+        item = next((f for f in factors if f["id"] == factor_id), None)
+        if item is None:
+            raise ValueError("找不到这个词条。")
+        if item["active"] == active:
+            return snapshot(session_id)
+        item["active"] = active
+        outcome = "restored" if active else "cut"
+    else:
+        if kind not in ("risk", "opportunity", "constraint", "fact") or not text.strip():
+            raise ValueError("请填写词条，并选择风险、机会、约束或事实。")
+        if len(factors) >= 16:
+            raise ValueError("本场最多 16 个词条，可以切掉暂不考虑的词条。")
+        item = {"id": hashlib.sha256(f"{session_id}|{len(factors)}|{text}".encode()).hexdigest()[:10],
+                "text": text.strip()[:160], "kind": kind, "active": True}
+        factors.append(item)
+        outcome = "added"
+    store.set_factors(session_id, factors)
+    verb = {"added": "加入", "cut": "切掉", "restored": "恢复"}[outcome]
+    store.add_turn(session_id, "emperor", "factor", "undecided", f"{verb}词条：{item['text']}",
+                   detail={"move": "factor", "outcome": outcome, "factor": dict(item),
+                           "round": store.count_traces(session_id, "speak")})
+    return snapshot(session_id)
+
+
+def respond(session_id: str) -> dict:
+    """插话之后立刻得到两种视角的回应；不消耗五轮群辩，也不强迫大臣迎合。"""
+    s = store.get_session(session_id)
+    if s is None:
+        raise KeyError(session_id)
+    if s["status"] == "decided":
+        raise ValueError("朝会已裁决。")
+    messages = [t for t in s["turns"] if t["minister"] == "emperor" and t["kind"] in ("decree", "factor")]
+    if not messages:
+        raise ValueError("请先发言或调整词条。")
+    message = messages[-1]
+    if any(t["kind"] == "reply" and (t.get("detail") or {}).get("reply_to") == message["seq"] for t in s["turns"]):
+        return snapshot(session_id)
+    stances = _debaters(store.current_stances(session_id))
+    ranked = sorted(stances, key=lambda m: -stances[m]["influence"])
+    first = message["target"] if message.get("target") in stances else ranked[0]
+    other = [m for m in ranked if m != first and stances[m]["stance"] != stances[first]["stance"]]
+    speakers = [first] + (other or [m for m in ranked if m != first])[:1]
+    sources = _sources(s)
+    prompt = (f"议题：{s['topic']}\n皇帝的发言：{message['text']}\n"
+              f"发言形式：{(message.get('detail') or {}).get('move', 'question')}\n"
+              f"回应顺序：{speakers}，立场不变：{json.dumps({m: stances[m]['stance'] for m in speakers})}\n"
+              f"刚才的论点：{json.dumps(s['turns'][-10:], ensure_ascii=False)}\n"
+              f"词条墙（切掉的不得继续引用）：{json.dumps(s.get('factors', []), ensure_ascii=False)}\n"
+              f"输入材料：{json.dumps(sources, ensure_ascii=False)}\n名册：{roster.roster_block(s['lang'])}\n"
+              "按固定发言人返回 JSON：" + json.dumps({"replies": [{"minister": m, "text": "直接回答皇帝，25字内",
+                "reason": "该大臣的第一人称论证，40–70字", "source": "材料编号或空串"} for m in speakers]}, ensure_ascii=False))
+    data, _ = llm.complete_json(
+        [{"role": "system", "content": ROUND_SYS + "\n只回答皇帝刚才的内容，不再生成对呛或游说。\n" + LANG_RULE.get(s["lang"], LANG_RULE["zh"])},
+         {"role": "user", "content": prompt}], op="reply", session_id=session_id, max_tokens=700,
+        fallback={"replies": [{"text": "模型暂不可用，臣不能假装已经论证。" if s["lang"] == "zh" else "The model is unavailable; I cannot justify a reply."} for _ in speakers]})
+    replies = data.get("replies") if isinstance(data.get("replies"), list) else []
+    for i, mid in enumerate(speakers):
+        item = _as_dict(replies[i]) if i < len(replies) else {}
+        store.add_turn(session_id, mid, "reply", stances[mid]["stance"], _text(item.get("text"), "……", 80),
+                       influence=stances[mid]["influence"], target="emperor",
+                       detail={**_argument(item, sources), "move": "answer", "round": store.count_traces(session_id, "speak"),
+                               "reply_to": message["seq"]})
     return snapshot(session_id)
 
 
@@ -529,6 +774,9 @@ def snapshot(session_id: str) -> dict:
         "status": s["status"], "verdict": s["verdict"], "lean": s["lean"],
         "lean_open": s["lean_open"], "echo_out": bool(s["echo_out"]),
         "round": rounds, "rounds_left": max(0, ROUNDS_PER_SESSION - rounds),
+        "fallback": any(t["fallback"] for t in store.list_traces(session_id)
+                        if t["op"] in ("stance", "speak", "reply", "verdict")),
+        "factors": s.get("factors", []), "alliances": _alliances(s["turns"]),
         "tally": _tally(stances),
         # 谏言是对已有发言的一个视角，不是新内容，所以不落 turn 表：
         # 把原话再存一遍会在评估里变成一条重复台词，而那不是模型的锅。

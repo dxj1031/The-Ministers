@@ -14,8 +14,10 @@
 只复制，不碰 git —— 提交信息值得每次自己写一遍。
 """
 import os
+import re
 import shutil
 import sys
+from urllib.parse import urlparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,7 +39,20 @@ def main():
         if not src.exists():
             sys.exit(f"缺少 {src}" + ("（先跑 tools/export_snapshot.py）" if name.endswith(".json") else ""))
         old = (DEST / name).read_bytes() if (DEST / name).exists() else None
-        shutil.copyfile(src, DEST / name)
+        if name == "index.html":
+            content = src.read_text(encoding="utf-8")
+            previous = re.search(r'<meta name="ministers-app" content="([^"]*)">', old.decode("utf-8") if old else "")
+            hosted = os.environ.get("MINISTERS_APP_URL", previous[1] if previous else "")
+            if hosted:
+                url = urlparse(hosted)
+                if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment:
+                    sys.exit("MINISTERS_APP_URL must be a public HTTPS court URL without credentials, query or fragment.")
+                if any(c in hosted for c in '<>"\''):
+                    sys.exit("Invalid hosted court URL.")
+            content = content.replace('<meta name="ministers-app" content="">', f'<meta name="ministers-app" content="{hosted}">')
+            (DEST / name).write_text(content, encoding="utf-8")
+        else:
+            shutil.copyfile(src, DEST / name)
         mark = "=" if old == src.read_bytes() else "+"
         print(f" {mark} ministers/{name}  {src.stat().st_size // 1024} KB")
     print(f"\n同步到 {DEST}\n下一步：在 personal-page 里 git add ministers && git commit && git push")

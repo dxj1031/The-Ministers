@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="ministers-app" content="">
 <script src="./support.js"></script>
 </head>
 <body>
@@ -55,36 +56,18 @@
   @keyframes vRum { 0%,100% { transform:rotate(0) translate(0,0);} 28%,60% { transform:rotate(46deg) translate(26px,12px);} 44% { transform:rotate(52deg) translate(30px,16px);} 80% { transform:rotate(0) translate(0,0);} }
   @keyframes vPuff { 0%,52% { transform:scale(.3); opacity:0;} 62% { transform:scale(1); opacity:.9;} 100% { transform:scale(1.6); opacity:0;} }
 
-  /* ── desktop fit ──────────────────────────────────────────────────────────────
-     手机画框内部永远是 390×844，一格都不重排；大屏只是把整块 scale 上去。
-     窄屏（<480px）完全不进这些规则，观感和以前一模一样。 */
+  /* Reflow the pages at desktop widths; never scale a fixed phone canvas. */
   :root { --mm-scale:1; }
-  .mm-stage { width:100vw; height:100dvh; min-height:560px; background:#1c1a20; display:flex; align-items:center; justify-content:center; }
-  .mm-slot  { flex:none; width:calc(390px * var(--mm-scale)); height:calc(844px * var(--mm-scale)); display:flex; align-items:center; justify-content:center; }
-  .mm-frame { flex:none; }
-  @media (min-width:480px) {
-    :root { --mm-scale:.70; }
-    .mm-stage { overflow:hidden; }
-    .mm-frame { transform:scale(var(--mm-scale)); transform-origin:50% 50%; }
-  }
-  /* 每档都保证 844 × scale ≤ 视口高，所以永远不产生滚动条 */
-  @media (min-width:480px) and (min-height:634px)  { :root { --mm-scale:.75; } }
-  @media (min-width:480px) and (min-height:676px)  { :root { --mm-scale:.80; } }
-  @media (min-width:480px) and (min-height:718px)  { :root { --mm-scale:.85; } }
-  @media (min-width:480px) and (min-height:760px)  { :root { --mm-scale:.90; } }
-  @media (min-width:480px) and (min-height:802px)  { :root { --mm-scale:.95; } }
-  @media (min-width:480px) and (min-height:844px)  { :root { --mm-scale:1; } }
-  @media (min-width:480px) and (min-height:887px)  { :root { --mm-scale:1.05; } }
-  @media (min-width:480px) and (min-height:929px)  { :root { --mm-scale:1.10; } }
-  @media (min-width:480px) and (min-height:971px)  { :root { --mm-scale:1.15; } }
-  @media (min-width:480px) and (min-height:1013px) { :root { --mm-scale:1.20; } }
-  @media (min-width:480px) and (min-height:1055px) { :root { --mm-scale:1.25; } }
-  @media (min-width:480px) and (min-height:1098px) { :root { --mm-scale:1.30; } }
-  @media (min-width:480px) and (min-height:1140px) { :root { --mm-scale:1.35; } }
-
-  /* ── desktop only · 右栏：朕的心事 + 朝堂实录 ──
-     手机上这一整栏不出现（和实录一直以来的规则一样）：390 的框里塞不下第二套面板，
-     硬塞只会把朝堂挤变形。桌面端两段共用同一套边框、圆角、底色和投影。 */
+  .mm-stage {width:100%;min-height:100dvh;background:#1c1a20;display:block;}
+  .mm-slot {width:100%;display:block;}
+  .mm-frame {width:100% !important;height:max(760px,100dvh) !important;transform:none !important;margin:auto;}
+  .mm-nav-caption {display:none;}
+  .mm-access-shade {position:fixed;inset:0;z-index:300;background:rgba(20,17,25,.88);display:grid;place-items:center;padding:20px;}
+  .mm-access-form {width:min(420px,100%);padding:28px;border:2px solid #b2a181;border-radius:18px;background:#f1ede4;color:#2b2733;font:16px/1.5 'ZCOOL KuaiLe',sans-serif;}
+  .mm-access-form h2 {margin:0 0 12px;}.mm-access-form p {font:14px/1.6 sans-serif;}
+  .mm-access-form input {width:100%;padding:14px;border:2px solid #81745e;border-radius:9px;font:16px sans-serif;}
+  .mm-access-form button {margin-top:16px;padding:12px 20px;border:0;border-radius:9px;background:#a4726a;color:white;font:16px sans-serif;cursor:pointer;}
+  /* 宽屏右栏、窄屏下方：复用同一份心事和实录。 */
   .mm-rail { flex:0 1 400px; min-width:0; margin-left:24px; height:calc(844px * var(--mm-scale));
              max-height:100dvh; display:flex; flex-direction:column; gap:14px; }
   .mm-mind { flex:none; display:flex; flex-direction:column; background:#2b2733; color:#f1ede4;
@@ -116,18 +99,183 @@
   .mm-log-body { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column-reverse; gap:10px; padding:14px;
                  scrollbar-color:#b2a181 #2b2733; }
   .mm-log-body:focus-visible { outline:3px solid #b2a181; outline-offset:-3px; }
-  /* sc-if 已经不渲染了；这条只是兜底，保证窄屏任何一帧都不可能占位 */
-  @media (max-width:1023px) { .mm-rail { display:none; } }
+  .mm-frame button:disabled { cursor:not-allowed !important; opacity:.45; }
+  .mm-paused *, .mm-paused *::before, .mm-paused *::after { animation-play-state:paused !important; transition:none !important; }
+  .mm-court-toolbar { flex:none; padding:8px 12px; background:#25212c; color:#f1ede4; display:flex; gap:8px; align-items:center; border-bottom:2px solid #b2a181; }
+  .mm-court-toolbar span { flex:1; font:700 11px/1.4 sans-serif; }
+  .mm-court-toolbar button, .mm-panel button { border:2px solid #b2a181; border-radius:8px; background:#2b2733; color:#f1ede4; padding:8px; cursor:pointer; font:700 12px/1.3 sans-serif; }
+  .mm-composer { flex:none; background:#f1ede4; color:#2b2733; padding:8px 14px; border-top:3px solid #b2a181; font:700 12px/1.4 sans-serif; }
+  .mm-compose-options { display:flex; gap:6px; align-items:center; margin-bottom:5px; }
+  .mm-compose-options select { min-width:0; flex:1; padding:5px; border:2px solid #b2a181; border-radius:7px; background:#f7f4ec; font:700 12px sans-serif; }
+  .mm-compose-input { display:flex; align-items:stretch; gap:6px; }
+  .mm-compose-input textarea { flex:1; min-width:0; resize:vertical; height:43px; max-height:85px; border:2px solid #2b2733; border-radius:8px; padding:6px; font:13px/1.4 sans-serif; }
+  .mm-compose-input button { flex:0 0 76px; border:2px solid #2b2733; border-radius:8px; background:#a4726a; color:#fff; cursor:pointer; font:700 12px/1.4 sans-serif; }
+  .mm-argument { margin-top:7px; padding-top:7px; border-top:1px dashed #847d88; text-align:left; font:600 12px/1.5 sans-serif; overflow-wrap:anywhere; }
+  .mm-argument p { margin:4px 0; }
+  .mm-group { position:absolute; inset:95px 7px 8px; z-index:24; border:3px solid #b2a181; border-radius:14px; background:rgba(35,31,42,.97); display:flex; flex-direction:column; overflow:hidden; }
+  .mm-group-head { flex:none; display:flex; align-items:center; justify-content:space-between; padding:8px; color:#d8c9a4; font:700 13px/1.4 sans-serif; }
+  .mm-group-head button { cursor:pointer; padding:6px; border:1px solid #b2a181; border-radius:7px; color:#fff; background:#2b2733; }
+  .mm-group-body { min-height:0; overflow-y:auto; display:grid; grid-template-columns:1fr 1fr; gap:7px; padding:7px; }
+  .mm-group-card { min-width:0; padding:9px; border:2px solid #706578; border-radius:10px; color:#f1ede4; font:12px/1.5 sans-serif; background:#332c39; overflow-wrap:anywhere; }
+  .mm-group-card.mm-group-active { border-color:#e0b969; background:#51423a; }
+  .mm-group-card button { border:0; background:none; color:#e0c88f; cursor:pointer; padding:0; font:700 13px sans-serif; }
+  .mm-group-card p { margin:6px 0; }
+  .mm-group-card small { color:#c4b7ca; }
+  .mm-panel { flex:none; border:3px solid #b2a181; border-radius:15px; padding:12px; background:#2b2733; color:#f1ede4; font:12px/1.5 sans-serif; }
+  .mm-panel h2 { margin:0 0 8px; color:#d8c9a4; font:700 18px/1.3 sans-serif; }
+  .mm-panel p { margin:7px 0; color:#c9c0ce; }
+  .mm-panel input { min-width:0; flex:1; width:100%; border:2px solid #847d88; border-radius:8px; padding:8px; background:#36303e; color:#fff; font:13px sans-serif; box-sizing:border-box; }
+  .mm-panel select { border:1px solid #b2a181; border-radius:6px; padding:7px; background:#36303e; color:#fff; }
+  .mm-factor { border:1px solid #b2a181; border-radius:9px; padding:8px; margin:7px 0; display:flex; align-items:center; gap:7px; }
+  .mm-factor span { flex:1; overflow-wrap:anywhere; }
+  .mm-factor-cut { opacity:.6; border-style:dashed; }
+  .mm-factor-cut span { text-decoration:line-through; }
+  .mm-events { max-height:230px; overflow-y:auto; }
+  .mm-event { border-left:3px solid #b2a181; padding:7px 9px; margin:9px 0; background:#37303e; }
+  .mm-event strong { color:#e6c685; }
+  .mm-trail { display:block; width:100%; text-align:left; margin:5px 0; }
+  .mm-rail { overflow-y:auto; }
+  .mm-log { flex:none; height:350px; }
+  .mm-stage.mm-focus-stage { width:100%; height:auto; min-height:100dvh; display:block; overflow:visible; padding:22px; box-sizing:border-box; }
+  .mm-focus-stage .mm-slot { width:100%; height:auto; display:block; }
+  .mm-focus-stage .mm-frame { width:min(1760px,100%) !important; height:auto !important; min-height:calc(100dvh - 44px); transform:none !important; margin:0 auto; overflow:visible !important; background:#1c1a20 !important; color:#f1ede4 !important; }
+  .mm-focus-header { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+  .mm-focus-header h1 { flex:1; margin:0; min-width:180px; font:400 24px/1.35 'ZCOOL KuaiLe',sans-serif; overflow-wrap:anywhere; }
+  .mm-focus-header .mm-topic-button {border:0;padding:0;background:transparent;font:inherit;color:inherit;text-align:left;}
+  .mm-focus-header small { color:#b2a181; }
+  .mm-focus-header button, .mm-focus-card button { border:1.5px solid #81745e; border-radius:9px; background:#2b2733; color:#eee6da; padding:9px 12px; cursor:pointer; font:600 12px/1.3 sans-serif; }
+  .mm-workspace { display:grid; grid-template-columns:minmax(310px,350px) minmax(0,1fr); gap:18px; align-items:start; }
+  .mm-focus-primary, .mm-focus-secondary { min-width:0; display:flex; flex-direction:column; gap:16px; }
+  .mm-focus-card { box-sizing:border-box; border:2px solid #8f8065; border-radius:18px; background:#29252f; padding:18px; min-width:0; }
+  .mm-focus-card h2 { margin:0 0 16px; color:#dfd0ae; font:400 21px/1.2 'ZCOOL KuaiLe',sans-serif; }
+  .mm-focus-wall { min-height:300px; }
+  .mm-factor-cloud { display:flex; flex-wrap:wrap; gap:10px; align-content:flex-start; }
+  .mm-factor-chip { display:flex; align-items:center; gap:8px; max-width:100%; padding:9px 9px 9px 12px; border:1.5px solid #ad9470; border-radius:13px; background:#3b3340; }
+  .mm-factor-chip small { flex:none; color:#c1ad8b; font:11px/1.3 sans-serif; }
+  .mm-factor-chip span { overflow-wrap:anywhere; font:600 15px/1.45 sans-serif; }
+  .mm-factor-chip button { flex:none; padding:4px 7px; border:0; background:transparent; color:#c2b8c8; font-size:18px; }
+  .mm-focus-add { margin-top:22px; display:flex; flex-wrap:wrap; gap:8px; }
+  .mm-focus-add input {order:-1;flex-basis:100% !important;}
+  .mm-focus-add input, .mm-focus-card select { min-width:0; border:1px solid #74677b; border-radius:9px; background:#35303c; color:#efe8f4; padding:10px; font:13px sans-serif; }
+  .mm-focus-add input { flex:1; width:100%; }
+  .mm-focus-cut { margin-top:14px; color:#a99cab; font:12px/1.5 sans-serif; }
+  .mm-focus-cut summary { cursor:pointer; }
+  .mm-focus-cut .mm-factor-cloud { margin-top:8px; }
+  .mm-focus-cut .mm-factor-chip { opacity:.65; }
+  .mm-focus-write { background:#eee7db; color:#2b2733; }
+  .mm-focus-write h2 { color:#2b2733; }
+  .mm-focus-write .mm-compose-options { margin-bottom:10px; }
+  .mm-focus-write select { background:#f8f4eb; color:#403541; }
+  .mm-focus-write textarea { width:100%; box-sizing:border-box; resize:vertical; min-height:104px; max-height:240px; border:1.5px solid #978678; border-radius:12px; padding:13px; background:#fbf8f0; color:#2b2733; font:15px/1.6 sans-serif; }
+  .mm-send-row { display:flex; align-items:center; justify-content:flex-end; gap:10px; margin-top:10px; }
+  .mm-send-row button { min-width:90px; background:#a4726a; color:white; border-color:#80564f; padding:11px 18px; }
+  .mm-graph-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .mm-graph-heading h2 { margin-bottom:8px; }
+  .mm-graph-legend { display:flex; gap:10px; color:#a89bac; font:10px sans-serif; }
+  .mm-graph-legend i { display:inline-block; width:12px; border-top:2px solid; margin-right:3px; vertical-align:middle; }
+  .mm-graph-board { position:relative; width:100%; height:clamp(470px,61vh,720px); overflow:hidden; border-radius:14px; background:#2b2733; isolation:isolate; }
+  .mm-graph-lines { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+  .mm-graph-lines path[data-edge] { cursor:pointer; fill:none; }
+  .mm-edge-active { animation:mmEdgeFlow 1.5s linear infinite; }
+  @keyframes mmEdgeFlow { to { stroke-dashoffset:-22; } }
+  .mm-graph-focus { margin:4px 0 0; font:11px sans-serif; color:#b8a8bc; }
+  .mm-compact-chat { min-height:190px; max-height:240px; display:flex; flex-direction:column; }
+  .mm-compact-chat h2 { margin-bottom:10px; }
+  .mm-chat-body { min-height:0; overflow-y:auto; display:flex; flex-direction:column-reverse; gap:6px; }
+  .mm-focus-card .mm-chat-row { display:flex; gap:9px; width:100%; padding:10px 8px; text-align:left; border:0; background:transparent; border-radius:9px; }
+  .mm-focus-card .mm-chat-row:hover, .mm-focus-card .mm-chat-row.is-current { background:#3b333f; }
+  .mm-chat-avatar { flex:none; font-size:23px; }
+  .mm-chat-expand {flex:none;align-self:center;color:#92819c;font:12px sans-serif;}
+  .mm-chat-message { min-width:0; flex:1; }
+  .mm-chat-message b { font:600 11px/1.3 sans-serif; color:#c4ae86; }.mm-chat-message small {font:10px sans-serif;color:#988c9e;margin-left:6px;}
+  .mm-chat-message p { margin:5px 0 0; color:#eee7ee; font:13px/1.5 sans-serif; overflow-wrap:anywhere; }
+  .mm-route-dialog { width:min(560px,90vw); max-height:80dvh; box-sizing:border-box; padding:24px; border:2px solid #aa9470; border-radius:18px; background:#2b2733; color:#f1ede4; overflow-y:auto; }
+  .mm-route-dialog::backdrop { background:rgba(15,12,19,.78); }
+  .mm-route-head { display:flex; justify-content:space-between; align-items:center; gap:12px; }.mm-route-head h2 {margin:0;font:22px sans-serif;}
+  .mm-route-head button { cursor:pointer; border:1px solid #ad9470; color:#eee; background:none; border-radius:7px; padding:7px 12px; }
+  .mm-route-chain { display:flex; flex-wrap:wrap; gap:8px; margin:22px 0;color:#dbc796;font:12px sans-serif; }.mm-route-chain span {padding:5px 8px;border:1px solid #685b70;border-radius:8px;}
+  .mm-route-chain span + span::before {content:'→ ';color:#8a7e92;}
+  .mm-route-dialog h3 {font:600 12px sans-serif;color:#b8a5c0;margin:20px 0 7px;}.mm-route-dialog p,.mm-route-dialog blockquote {font:14px/1.7 sans-serif;margin:8px 0;overflow-wrap:anywhere;}.mm-route-dialog blockquote {border-left:2px solid #b2a181;padding-left:12px;color:#c5b5cc;}
+  .mm-court-actor {position:absolute;transform:translate(-50%,-50%);transition:left 1.3s cubic-bezier(.45,.1,.25,1),top 1.3s cubic-bezier(.45,.1,.25,1);z-index:7;}
+  .mm-court-actor.is-speaking {z-index:18;}
+  .mm-paused .mm-actor-speech {animation:none !important;}
+  .mm-focus-card .mm-actor-body {all:unset;cursor:pointer;display:flex;flex-direction:column;align-items:center;}
+  .mm-actor-face {width:54px;height:54px;border:3px solid #2b2733;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:33px;}
+  .mm-actor-shadow {width:42px;height:8px;background:rgba(0,0,0,.3);border-radius:50%;margin-top:5px;}
+  .mm-actor-name {font:12px/1.4 'ZCOOL KuaiLe',sans-serif;color:#e5dac4;white-space:nowrap;padding:3px 6px;background:#2b2733;border-radius:6px;}
+  .is-speaking .mm-actor-face {outline:2px solid #f4e3b2;outline-offset:5px;}
+  .mm-focus-card .mm-actor-speech {position:absolute;bottom:calc(100% + 10px);left:0;width:max-content;max-width:240px;background:#f7f4ec;color:#2b2733;border:3px solid #2b2733;border-radius:14px 14px 14px 3px;box-shadow:4px 4px 0 rgba(0,0,0,.4);font:16px/1.5 'ZCOOL KuaiLe',sans-serif;padding:10px 14px;text-align:left;animation:bounceIn .3s cubic-bezier(.3,1.7,.5,1) both;}
+  .mm-focus-card .mm-actor-speech.from-right {left:auto;right:0;border-radius:14px 14px 3px 14px;}
+  .mm-focus-card .mm-actor-speech.from-center {left:50%;transform:translateX(-50%);}
+  .mm-focus-card .mm-actor-speech.from-throne {bottom:auto;top:calc(100% + 10px);left:50%;transform:translateX(-50%);}
+  .mm-actor-face > .sc-interp {display:contents;}
+  .mm-silence-cry {position:absolute;top:4%;left:58%;z-index:21;padding:8px 14px;border:3px solid #f1ede4;border-radius:12px;background:#a4726a;font:20px ZCOOL KuaiLe,sans-serif;animation:bounceIn .3s both;}
+  .mm-neutral-flag {position:absolute;top:23%;left:50%;transform:translateX(-50%);font:13px 'ZCOOL KuaiLe',sans-serif;color:#b7aabd;z-index:5;}
+  .mm-court-scene .mm-graph-lines {z-index:6;pointer-events:none;}
+  .mm-graph-focus {min-height:16px;}
+  @media (min-width:1440px) {.mm-focus-secondary{display:grid;grid-template-columns:minmax(0,1fr) 280px;align-items:stretch;}.mm-compact-chat{height:calc(clamp(470px,72vh,800px) + 70px);max-height:none;}.mm-graph-board{height:clamp(470px,72vh,800px);}}
+  @media (min-width:1600px) {.mm-workspace{grid-template-columns:380px minmax(0,1fr);gap:24px;}.mm-actor-face{width:66px;height:66px;font-size:40px;}.mm-actor-name{font-size:14px;}}
+  @media (max-width:1000px) and (min-width:800px) {.mm-workspace{grid-template-columns:290px minmax(0,1fr);gap:12px;}.mm-focus-card{padding:12px;}.mm-actor-face{width:38px;height:38px;font-size:25px;}.mm-actor-name{font-size:10px;}.mm-focus-card .mm-actor-speech{max-width:160px;font-size:13px;}}
+  .mm-focus-stage :focus-visible { outline:2px solid #e4c478; outline-offset:3px; }
+  @media (max-width:799px) { .mm-stage.mm-focus-stage {padding:14px;} .mm-workspace {grid-template-columns:1fr;} .mm-focus-header h1 {font-size:20px;flex-basis:100%;}.mm-focus-card {padding:16px;}.mm-focus-secondary {display:grid;grid-template-columns:1fr;}.mm-graph-board {height:510px;}.mm-actor-face{width:38px;height:38px;font-size:25px;}.mm-actor-name{font-size:10px;}.mm-focus-card .mm-actor-speech{max-width:180px;font-size:13px;}.mm-compact-chat {max-height:340px;} }
+  @media (prefers-reduced-motion:reduce) { .mm-court-actor {transition:none;}.mm-edge-active {animation:none;} }
+  @media (max-width:1023px) {
+    .mm-stage { height:auto; min-height:100dvh; flex-direction:column; justify-content:flex-start; overflow:visible; padding-bottom:20px; }
+    .mm-rail { flex:none; width:min(94vw,500px); height:auto; max-height:none; margin:16px 0 0; overflow:visible; }
+  }
+
+  @media (min-width:800px) {
+    .mm-stage:not(.mm-focus-stage) {padding:24px;}
+    .mm-stage:not(.mm-focus-stage) .mm-frame {width:min(1440px,100%) !important;height:max(620px,calc(100dvh - 48px)) !important;border-radius:20px;box-shadow:0 0 0 2px #81745e;}
+    .mm-frame > .mm-opening,.mm-frame > .mm-cast,.mm-frame > .mm-petition,.mm-frame > .mm-verdict {top:60px !important;}
+    .mm-page-nav {top:12px !important;right:20px !important;transform:none !important;flex-direction:row !important;gap:10px !important;}
+    .mm-page-nav button {width:auto !important;height:32px !important;min-width:34px;padding:0 10px !important;margin:0 !important;line-height:32px !important;font-size:12px !important;}
+    .mm-nav-caption {display:inline;margin-left:6px;}
+    .mm-opening-hero {padding:30px 120px 20px 50px !important;}
+    .mm-opening-copy {display:grid !important;grid-template-columns:minmax(0,1.1fr) minmax(260px,.9fr);grid-template-rows:auto auto auto 1fr;align-content:center;padding:0 !important;}
+    .mm-opening-title {grid-column:1;font-size:clamp(68px,8vw,120px) !important;line-height:1.05 !important;}
+    .mm-opening-sub {grid-column:1;font-size:clamp(16px,1.6vw,23px) !important;margin-top:20px !important;}
+    .mm-opening-seal {grid-column:2;grid-row:1/5;margin:0 !important;min-height:300px !important;}
+    .mm-opening-seal > div {transform:scale(1.65);}
+    .mm-opening-status {grid-column:1;justify-content:flex-start !important;margin:20px 0 0 !important;align-self:end;}
+    .mm-opening > button,.mm-cast > button,.mm-petition > button {padding:22px 40px !important;}
+    .mm-cast-list {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding:24px !important;align-content:start;}
+    .mm-cast-card {min-width:0;min-height:108px;padding:18px 12px !important;border:2px solid #b2a181 !important;border-radius:14px;background:#f7f4ec;}
+    .mm-cast-card > div {flex-shrink:0;}
+    .mm-cast-card > div:nth-of-type(2) {flex-shrink:1;}
+    .mm-petition-body {display:grid !important;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:60px;padding:40px 64px !important;align-items:center;}
+    .mm-petition-form {position:relative;min-width:0;}
+    .mm-petition-label {font-size:27px !important;line-height:1.3 !important;color:#a4726a !important;}
+    .mm-petition-form > input {padding:18px !important;margin-top:20px !important;}
+    .mm-petition-examples {min-width:0;margin:0 !important;border-left:2px dashed #b2a181;padding-left:30px;}
+    .mm-petition-examples button {padding:20px 0 !important;}
+    .mm-verdict-content {display:grid !important;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:32px;align-content:center;align-items:center;padding:36px 60px !important;}
+    .mm-verdict-content > div:first-of-type {grid-row:span 2;}
+    .mm-verdict-content > div {margin-top:0 !important;}
+    .mm-frame > [role=status] {top:66px !important;left:24px !important;right:24px !important;}
+    .mm-stage:not(.mm-focus-stage) .mm-rail {width:min(1440px,100%);max-width:none;height:auto;margin:24px auto 0;}
+  }
+  @media (min-width:800px) and (max-width:1050px) {
+    .mm-cast-list {grid-template-columns:repeat(2,minmax(0,1fr));}
+    .mm-opening-hero {padding-left:30px !important;padding-right:100px !important;}
+    .mm-opening-seal > div {transform:scale(1.2);}
+    .mm-petition-body {gap:30px;padding:30px !important;}
+  }
+  @media (max-width:799px) {
+    .mm-stage:not(.mm-focus-stage) {padding-bottom:0;}
+    .mm-stage:not(.mm-focus-stage) .mm-frame {max-width:100%;}
+  }
+
 </style>
 </helmet>
 
-<div class="mm-stage">
+<div class="mm-stage {{ focusStageClass }}">
 <div class="mm-slot">
-<div class="mm-frame" data-screen-label="The Court · Cel×Type" style="position:relative; width:390px; height:844px; flex-shrink:0; background:#f1ede4; overflow:hidden; display:flex; flex-direction:column; font-family:'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#2b2733;">
+<div class="mm-frame {{ pausedClass }}" data-screen-label="The Court · Cel×Type" style="position:relative; width:390px; height:844px; flex-shrink:0; background:#f1ede4; overflow:hidden; display:flex; flex-direction:column; font-family:'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#2b2733;">
 
   <!-- ============================== SCREEN 1 · OPENING ============================== -->
   <sc-if value="{{ scr1 }}" hint-placeholder-val="{{ true }}">
-  <div data-screen-label="01 开场" style="position:absolute; inset:0; display:flex; flex-direction:column; background:#f1ede4;">
+  <div class="mm-opening" data-screen-label="01 开场" style="position:absolute; inset:0; display:flex; flex-direction:column; background:#f1ede4;">
     <!-- halftone air -->
     <div style="position:absolute; inset:0; pointer-events:none; background-image:radial-gradient(circle, rgba(43,39,51,.08) 1.6px, transparent 2px); background-size:17px 17px;"></div>
     <!-- rising hot topics -->
@@ -145,12 +293,12 @@
     </div>
     <div style="margin:10px 18px 0; height:4px; background:#2b2733; border-radius:2px; position:relative; z-index:2;"></div>
     <!-- giant stacked title -->
-    <div style="flex:1; position:relative; padding:6px 96px 0 18px; display:flex;">
-      <div style="flex:1; display:flex; flex-direction:column; padding-top:2px; animation:riseIn .7s cubic-bezier(.2,.9,.2,1) both; position:relative; z-index:2;">
-        <div style="font:{{ t.titleFont }}; color:#a4726a; -webkit-text-stroke:4px #2b2733; paint-order:stroke fill; text-shadow:6px 7px 0 #2b2733; letter-spacing:-2px;">{{ t.title1 }}</div>
-        <div style="font:{{ t.titleFont }}; color:transparent; -webkit-text-stroke:3px #2b2733; letter-spacing:-2px;">{{ t.title2 }}</div>
-        <div style="margin-top:14px; font:{{ t.subFont }}; letter-spacing:.5px;">{{ t.sub1 }}<br><span style="color:#a4726a;">{{ t.sub2 }}</span></div>
-        <div style="flex:1; min-height:150px; display:flex; align-items:center; justify-content:center; padding:10px 0; margin-right:-78px;">
+    <div class="mm-opening-hero" style="flex:1; position:relative; padding:6px 96px 0 18px; display:flex;">
+      <div class="mm-opening-copy" style="flex:1; display:flex; flex-direction:column; padding-top:2px; animation:riseIn .7s cubic-bezier(.2,.9,.2,1) both; position:relative; z-index:2;">
+        <div class="mm-opening-title" style="font:{{ t.titleFont }}; color:#a4726a; -webkit-text-stroke:4px #2b2733; paint-order:stroke fill; text-shadow:6px 7px 0 #2b2733; letter-spacing:-2px;">{{ t.title1 }}</div>
+        <div class="mm-opening-title" style="font:{{ t.titleFont }}; color:transparent; -webkit-text-stroke:3px #2b2733; letter-spacing:-2px;">{{ t.title2 }}</div>
+        <div class="mm-opening-sub" style="margin-top:14px; font:{{ t.subFont }}; letter-spacing:.5px;">{{ t.sub1 }}<br><span style="color:#a4726a;">{{ t.sub2 }}</span></div>
+        <div class="mm-opening-seal" style="flex:1; min-height:150px; display:flex; align-items:center; justify-content:center; padding:10px 0; margin-right:-78px;">
           <div style="position:relative; width:150px; height:150px;">
             <div style="position:absolute; left:50%; top:50%; width:280px; height:280px; background:repeating-conic-gradient(rgba(178,166,140,.55) 0deg 9deg, transparent 9deg 18deg); border-radius:50%; animation:burstSpin 24s linear infinite; z-index:-1;"></div>
             <div style="position:absolute; left:8px; top:8px; animation:stampIn .6s .5s cubic-bezier(.2,1.2,.3,1) both;">
@@ -164,7 +312,7 @@
             <span style="position:absolute; left:-32px; bottom:8px; color:#a4726a; font-size:18px; -webkit-text-stroke:2px #2b2733; animation:sparkle 1.9s .4s ease-in-out infinite;">✦</span>
           </div>
         </div>
-        <div style="display:flex; align-items:center; justify-content:center; gap:9px; padding-bottom:8px; margin-right:-78px;">
+        <div class="mm-opening-status" style="display:flex; align-items:center; justify-content:center; gap:9px; padding-bottom:8px; margin-right:-78px;">
           <span style="width:10px; height:10px; border-radius:50%; background:#a4726a; border:2px solid #2b2733; animation:sparkle 1.2s ease-in-out infinite;"></span>
           <span style="font:800 12px/1 'Baloo 2',sans-serif; letter-spacing:1.5px;">{{ t.statusLine }}</span>
         </div>
@@ -199,7 +347,7 @@
 
   <!-- ============================== SCREEN 2 · CAST INDEX ============================== -->
   <sc-if value="{{ scr2 }}" hint-placeholder-val="{{ false }}">
-  <div data-screen-label="02 名册" style="position:absolute; inset:0; display:flex; flex-direction:column; background:#f1ede4;">
+  <div class="mm-cast" data-screen-label="02 名册" style="position:absolute; inset:0; display:flex; flex-direction:column; background:#f1ede4;">
     <div style="padding:calc(16px + env(safe-area-inset-top)) 18px 0;">
       <div style="display:flex; justify-content:space-between; align-items:center; font:800 11px/1 'Baloo 2',sans-serif; letter-spacing:1.5px;">
         <span>{{ t.castKicker }}</span>
@@ -210,9 +358,9 @@
         <span style="font:400 15px/1.2 {{ altFont }}; padding-bottom:6px; color:#847d88;">{{ t.castSub1 }}<br>{{ t.castSub2 }}</span>
       </div>
     </div>
-    <div style="flex:1; overflow-y:auto; padding:4px 38px 12px 18px;">
+    <div class="mm-cast-list" style="flex:1; overflow-y:auto; padding:4px 38px 12px 18px;">
       <sc-for list="{{ cast }}" as="m" hint-placeholder-count="11">
-        <div style="display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:2px dashed rgba(43,39,51,.3); animation:riseIn .5s cubic-bezier(.2,.9,.2,1) both;">
+        <div class="mm-cast-card" style="display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:2px dashed rgba(43,39,51,.3); animation:riseIn .5s cubic-bezier(.2,.9,.2,1) both;">
           <span style="font:400 12px/1 'Lilita One',sans-serif; color:#a9a3ab; width:24px;">{{ m.no }}</span>
           <div style="width:52px; height:52px; border-radius:50%; border:3.5px solid #2b2733; background:radial-gradient(circle at 36% 28%, #fff, {{ m.bg }}); box-shadow:0 0 0 4px {{ m.ring }}, 3.5px 4px 0 rgba(43,39,51,.35); display:flex; align-items:center; justify-content:center; font-size:30px; animation:{{ m.avAnim }};">{{ m.head }}</div>
           <div style="flex:1; min-width:0;">
@@ -235,7 +383,7 @@
 
   <!-- ============================== SCREEN 3 · PETITION ============================== -->
   <sc-if value="{{ scr3 }}" hint-placeholder-val="{{ false }}">
-  <div data-screen-label="03 奏章" style="position:absolute; inset:0; display:flex; flex-direction:column; background:#f1ede4;">
+  <div class="mm-petition" data-screen-label="03 奏章" style="position:absolute; inset:0; display:flex; flex-direction:column; background:#f1ede4;">
     <div style="position:absolute; inset:0; pointer-events:none; background-image:radial-gradient(circle, rgba(164,120,112,.12) 1.8px, transparent 2.2px); background-size:16px 16px;"></div>
     <div style="padding:calc(16px + env(safe-area-inset-top)) 18px 0; position:relative;">
       <div style="display:flex; justify-content:space-between; align-items:center; font:800 11px/1 'Baloo 2',sans-serif; letter-spacing:1.5px;">
@@ -243,10 +391,10 @@
         <span style="background:#a4726a; color:#f1ede4; border:2.5px solid #2b2733; border-radius:10px; padding:4px 9px; box-shadow:2.5px 2.5px 0 #2b2733; transform:rotate(2deg);">{{ t.petChip }}</span>
       </div>
     </div>
-    <div style="flex:1; position:relative; padding:0 38px 0 18px; display:flex; flex-direction:column; justify-content:center; overflow-y:auto;">
+    <div class="mm-petition-body" style="flex:1; position:relative; padding:0 38px 0 18px; display:flex; flex-direction:column; justify-content:center; overflow-y:auto;">
       <div style="position:absolute; left:4px; top:-14px; font:400 140px/1 'ZCOOL KuaiLe',sans-serif; color:rgba(164,120,112,.25);">「</div>
       <div style="position:absolute; right:4px; bottom:30px; font:400 140px/1 'ZCOOL KuaiLe',sans-serif; color:rgba(164,120,112,.25);">」</div>
-      <div style="font:800 12px/1 'Baloo 2',sans-serif; letter-spacing:2px; color:#847d88;">{{ t.petLabel }}</div>
+      <div class="mm-petition-form"><div class="mm-petition-label" style="font:800 12px/1 'Baloo 2',sans-serif; letter-spacing:2px; color:#847d88;">{{ t.petLabel }}</div>
       <input value="{{ topic }}" onInput="{{ topicChange }}" placeholder="{{ t.topicPh }}" style="margin-top:12px; width:100%; border:3px solid #2b2733; border-radius:14px; background:#f7f4ec; padding:12px 13px; font:400 21px/1.3 {{ dispFont }}; color:#2b2733; outline:none; box-shadow:3px 4px 0 rgba(178,166,140,.75);">
       <input value="{{ ctx }}" onInput="{{ ctxChange }}" placeholder="{{ t.ctxPh }}" style="margin-top:9px; width:100%; border:2.5px dashed rgba(43,39,51,.4); border-radius:12px; background:transparent; padding:9px 12px; font:600 14px/1.4 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#2b2733; outline:none;">
       <div style="margin-top:14px;">
@@ -261,7 +409,7 @@
         <p style="margin:7px 0 0; font:600 11.5px/1.5 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#6b6470;">{{ t.leanHint }}</p>
       </div>
       <div style="margin-top:12px; font:600 14.5px/1.55 'Baloo 2',sans-serif; color:{{ errColor }};">{{ stakesLine }}</div>
-      <div style="margin-top:24px;">
+      </div><div class="mm-petition-examples" style="margin-top:24px;">
         <div style="display:flex; align-items:center; gap:8px; padding-bottom:8px; border-bottom:3px solid #2b2733;">
           <span style="font:400 16px/1 {{ dispFont }};">{{ t.rerunTitle }}</span>
           <span style="font:400 10px/1 {{ altFont }}; letter-spacing:2px; color:#a4726a;">{{ t.rerunSub }}</span>
@@ -278,18 +426,48 @@
   </div>
   </sc-if>
 
-  <!-- ============================== SCREEN 4 · DEBATE ============================== -->
-  <sc-if value="{{ scr4 }}" hint-placeholder-val="{{ false }}">
-  <div data-screen-label="04 辩论" style="position:absolute; inset:0; display:flex; flex-direction:column; background:#2b2733; color:#f1ede4;">
-    <!-- act ticker -->
-    <div style="border-bottom:3px solid rgba(241,237,228,.3); overflow:hidden; padding:calc(8px + env(safe-area-inset-top)) 0 8px;">
-      <div style="display:inline-flex; white-space:nowrap; animation:tickerMove 11s linear infinite;">
-        <span style="font:400 13px/1 {{ dispFont }}; color:#b2a181; letter-spacing:2px;">{{ actTicker }}</span>
-        <span style="font:400 13px/1 {{ dispFont }}; color:#b2a181; letter-spacing:2px;">{{ actTicker }}</span>
+  <sc-if value="{{ compactCourtOn }}">
+  <section class="mm-focus-court" aria-label="{{ focusTopic }}">
+    <header class="mm-focus-header">
+      <h1><button class="mm-topic-button" onClick="{{ go3 }}" title="{{ newTopicLabel }}">{{ focusTopic }} <span aria-hidden="true">↗</span></button></h1><small role="status">{{ focusStatus }}</small><sc-if value="{{ fallbackOn }}"><small title="{{ fallbackText }}">{{ fallbackLabel }}</small></sc-if>
+      <button onClick="{{ togglePlayback }}" disabled="{{ playbackDisabled }}">{{ playbackLabel }}</button>
+      <button onClick="{{ stepLine }}" disabled="{{ stepDisabled }}">{{ stepLabel }}</button>
+      <button onClick="{{ go5 }}" disabled="{{ ruleDisabled }}">{{ t.ruleNow }}</button>
+      <button onClick="{{ openItv }}" disabled="{{ interventionDisabled }}">🖐 {{ t.intervene }}</button>
+      <button onClick="{{ toggleLang }}">{{ langBtnLabel }}</button>
+    </header>
+    <div class="mm-workspace">
+      <div class="mm-focus-primary">
+        <section class="mm-focus-card mm-focus-wall" id="court-factor-wall" aria-label="{{ wallTitle }}">
+          <h2>🧩 {{ wallTitle }}</h2>
+          <sc-if value="{{ factorsEmpty }}"><p style="color:#9b8da5;font:14px sans-serif;">{{ emptyWallLabel }}</p></sc-if>
+          <div class="mm-factor-cloud">
+            <sc-for list="{{ activeFactors }}" as="f">
+              <div class="mm-factor-chip"><small>{{ f.label }}</small><span>{{ f.text }}</span><button onClick="{{ f.toggle }}" disabled="{{ factorBusy }}" aria-label="{{ f.toggleLabel }}" title="{{ f.toggleLabel }}">×</button></div>
+            </sc-for>
+          </div>
+          <div class="mm-focus-add">
+            <select value="{{ factorKind }}" onChange="{{ factorKindChange }}" aria-label="{{ wallTitle }}"><sc-for list="{{ factorKinds }}" as="o"><option value="{{ o.value }}" label="{{ o.label }}">{{ o.label }}</option></sc-for></select>
+            <input value="{{ factorText }}" onInput="{{ factorChange }}" maxLength="{{ 160 }}" placeholder="{{ compactFactorPlaceholder }}" aria-label="{{ compactFactorPlaceholder }}">
+            <button onClick="{{ factorSubmit }}" disabled="{{ factorDisabled }}">{{ addFactorLabel }}</button>
+          </div>
+          <sc-if value="{{ cutCount }}"><details class="mm-focus-cut"><summary>{{ cutLabel }} · {{ cutCount }}</summary><div class="mm-factor-cloud"><sc-for list="{{ cutFactors }}" as="f"><div class="mm-factor-chip"><span>{{ f.text }}</span><button onClick="{{ f.toggle }}" disabled="{{ factorBusy }}" aria-label="{{ f.toggleLabel }}">{{ f.action }}</button></div></sc-for></div></details></sc-if>
+        </section>
+        <section class="mm-focus-card mm-focus-write" aria-label="{{ emperorLabel }}">
+          <h2>😾 {{ emperorLabel }}</h2>
+          <div class="mm-compose-options">
+            <select value="{{ emperorTarget }}" onChange="{{ emperorTargetChange }}" aria-label="{{ targetSelectLabel }}"><sc-for list="{{ emperorTargets }}" as="o"><option value="{{ o.value }}" label="{{ o.label }}">{{ o.label }}</option></sc-for></select>
+            <select value="{{ emperorKind }}" onChange="{{ emperorKindChange }}" aria-label="{{ modeSelectLabel }}"><sc-for list="{{ emperorModes }}" as="o"><option value="{{ o.value }}" label="{{ o.label }}">{{ o.label }}</option></sc-for></select>
+          </div>
+          <textarea value="{{ emperorText }}" onInput="{{ emperorChange }}" onKeyDown="{{ emperorKey }}" maxLength="{{ 200 }}" placeholder="{{ compactEmperorPlaceholder }}" aria-label="{{ emperorLabel }}"></textarea>
+          <div class="mm-send-row"><button onClick="{{ emperorSend }}" disabled="{{ emperorDisabled }}">{{ compactSendLabel }}</button></div>
+        </section>
       </div>
-    </div>
+      <div class="mm-focus-secondary">
+        <section class="mm-focus-card" aria-label="{{ graphTitle }}">
+          <div class="mm-graph-heading"><h2>{{ graphTitle }}</h2><div class="mm-graph-legend"><span><i style="color:#82b196;"></i>{{ graphAllyLabel }}</span><span><i style="color:#d9bb79;"></i>{{ graphLobbyLabel }}</span><span><i style="color:#e19289;"></i>{{ graphPressureLabel }}</span></div></div>
     <!-- stage · overhead court plaza -->
-    <div style="flex:1; position:relative; overflow:hidden; animation:{{ stageAnim }};">
+    <div class="mm-court-scene mm-graph-board" style="animation:{{ stageAnim }};" aria-label="{{ graphTitle }}">
       <div style="position:absolute; left:50%; top:16%; width:720px; height:720px; transform:translate(-50%,-50%); background:repeating-conic-gradient(rgba(178,166,140,.12) 0deg 8deg, transparent 8deg 16deg); border-radius:50%;"></div>
       <div style="position:absolute; right:-4px; top:76px; writing-mode:vertical-rl; font:400 {{ heatSize }}/1 {{ dispFont }}; color:transparent; -webkit-text-stroke:2px rgba(164,120,112,.55); letter-spacing:8px; z-index:1;">{{ heatWord }}</div>
       <!-- perspective floor: two camps -->
@@ -302,36 +480,28 @@
       </div>
       <!-- header row -->
       <div style="position:relative; z-index:6; padding:12px 38px 0 18px; display:flex; justify-content:space-between; align-items:baseline;">
-        <span style="font:800 11px/1 'Baloo 2',sans-serif; letter-spacing:2px; color:#a9a3ab;">{{ t.nowSpeaking }}</span>
+        <span style="font:800 11px/1.4 'Baloo 2',sans-serif; color:#b2a181; max-width:75%;">{{ speakingLabel }}</span>
         <span style="font:400 10.5px/1 {{ altFont }}; letter-spacing:1px; color:#847d88;">{{ t.tapHint }}</span>
       </div>
-      <!-- throne · the emperor looks down -->
-      <div style="position:absolute; left:50%; top:34px; transform:translateX(-50%); z-index:6; display:flex; flex-direction:column; align-items:center;">
-        <div style="width:60px; height:60px; border-radius:50%; border:4px solid #2b2733; background:radial-gradient(circle at 36% 28%, #f7f4ec, #e3d9c4); box-shadow:0 0 0 4px #b2a181, 4px 5px 0 rgba(0,0,0,.4); display:flex; align-items:center; justify-content:center; font-size:34px; animation:idleBob 2.6s ease-in-out infinite;">😾</div>
-        <div style="margin-top:-6px; background:#2b2733; color:#b2a181; font:800 9px/1 'Baloo 2',sans-serif; letter-spacing:1.5px; padding:3px 8px; border-radius:8px; border:2px solid rgba(241,237,228,.4);">{{ t.throneTag }}</div>
-        <sc-if value="{{ silenceOn }}" hint-placeholder-val="{{ false }}">
-          <div style="position:absolute; bottom:100%; left:50%; transform:translate(-50%,-4px); background:#a4726a; color:#f1ede4; border:3px solid #2b2733; border-radius:14px 14px 14px 3px; padding:7px 12px; font:400 16px/1.2 {{ dispFont }}; letter-spacing:2px; white-space:nowrap; box-shadow:3px 3px 0 rgba(0,0,0,.4); z-index:21; animation:bounceIn .3s cubic-bezier(.3,1.7,.5,1) both;">💥 {{ t.silenceCry }}</div>
-        </sc-if>
-      </div>
       <!-- camp flags -->
-      <div style="position:absolute; left:10px; top:23%; z-index:5; transform:rotate(-5deg); white-space:nowrap; background:#a4726a; color:#f1ede4; border:3px solid #f1ede4; border-radius:12px; padding:6px 11px; box-shadow:3px 3px 0 rgba(0,0,0,.4); font:400 13px/1 {{ dispFont }}; letter-spacing:1px;">{{ t.proLabel }} · {{ proCount }}</div>
-      <div style="position:absolute; right:40px; top:23%; z-index:5; transform:rotate(5deg); white-space:nowrap; background:#b2a181; color:#2b2733; border:3px solid #f1ede4; border-radius:12px; padding:6px 11px; box-shadow:3px 3px 0 rgba(0,0,0,.4); font:400 13px/1 {{ dispFont }}; letter-spacing:1px;">{{ t.conLabel }} · {{ conCount }}</div>
+      <sc-if value="{{ silenceOn }}"><div class="mm-silence-cry">💥 {{ t.silenceCry }}</div></sc-if>
+      <div style="position:absolute; left:10px; top:23%; z-index:5; transform:rotate(-5deg); white-space:nowrap; background:#58836b; color:#f1ede4; border:3px solid #f1ede4; border-radius:12px; padding:6px 11px; box-shadow:3px 3px 0 rgba(0,0,0,.4); font:400 13px/1 {{ dispFont }}; letter-spacing:1px;">{{ t.proLabel }} · {{ proCount }}</div>
+      <div style="position:absolute; right:10px; top:23%; z-index:5; transform:rotate(5deg); white-space:nowrap; background:#d48c86; color:#2b2733; border:3px solid #f1ede4; border-radius:12px; padding:6px 11px; box-shadow:3px 3px 0 rgba(0,0,0,.4); font:400 13px/1 {{ dispFont }}; letter-spacing:1px;">{{ t.conLabel }} · {{ conCount }}</div>
       <!-- lobbying banner -->
       <sc-if value="{{ lobActive }}" hint-placeholder-val="{{ false }}">
         <div style="position:absolute; left:14px; top:calc(23% + 48px); transform:rotate(-2deg); z-index:11; background:#f7f4ec; color:#2b2733; border:3px solid #2b2733; border-radius:12px; padding:5px 11px; font:400 12.5px/1.2 {{ dispFont }}; letter-spacing:1px; box-shadow:3px 3px 0 rgba(0,0,0,.4); white-space:nowrap; animation:bounceIn .35s cubic-bezier(.3,1.7,.5,1) both;">🤝 {{ t.lobbyBanner }}</div>
       </sc-if>
-      <!-- standing ministers (tap to hear) -->
-      <sc-for list="{{ plaza }}" as="p" hint-placeholder-count="9">
-        <div style="position:absolute; left:{{ p.x }}; top:{{ p.y }}; z-index:{{ p.z }}; animation:{{ p.wander }}; transition:left 1.3s cubic-bezier(.45,.1,.25,1), top 1.3s cubic-bezier(.45,.1,.25,1);">
-          <sc-if value="{{ p.poked }}" hint-placeholder-val="{{ false }}">
-            <div style="position:absolute; bottom:100%; left:{{ p.bLeft }}; right:{{ p.bRight }}; transform:{{ p.bXform }} translateY(-8px); background:#f7f4ec; color:#2b2733; border:3px solid #2b2733; border-radius:{{ p.bRad }}; padding:6px 10px; font:400 13px/1.25 {{ dispFont }}; white-space:nowrap; box-shadow:3px 3px 0 rgba(0,0,0,.4); z-index:20; animation:bounceIn .3s cubic-bezier(.3,1.7,.5,1) both;">{{ p.line }}</div>
-          </sc-if>
-          <sc-if value="{{ p.sup }}" hint-placeholder-val="{{ false }}">
-            <div style="position:absolute; bottom:100%; left:{{ p.bLeft }}; right:{{ p.bRight }}; transform:{{ p.bXform }} translateY(-6px); background:#2b2733; color:#f1ede4; border:3px solid #f1ede4; border-radius:{{ p.bRad }}; padding:5px 9px; font:400 11.5px/1.25 {{ dispFont }}; white-space:nowrap; box-shadow:3px 3px 0 rgba(0,0,0,.35); z-index:19; animation:bounceIn .3s cubic-bezier(.3,1.7,.5,1) both;">{{ p.supLine }}</div>
-          </sc-if>
-          <button onClick="{{ p.poke }}" style="all:unset; cursor:pointer; display:flex; flex-direction:column; align-items:center; transform:scale({{ p.scale }}); transition:transform 1.3s cubic-bezier(.45,.1,.25,1);">
-            <div style="width:46px; height:46px; border-radius:50%; border:3px solid #2b2733; background:radial-gradient(circle at 36% 28%, #fff, {{ p.bg }}); box-shadow:0 0 0 3px {{ p.ring }}, 3px 4px 0 rgba(0,0,0,.35); display:flex; align-items:center; justify-content:center; font-size:27px; animation:idleBob {{ p.dur }} ease-in-out infinite;">{{ p.head }}</div>
-            <div style="width:32px; height:8px; border-radius:50%; background:rgba(0,0,0,.32); margin-top:2px;"></div>
+      <svg class="mm-graph-lines" viewBox="0 0 400 310" preserveAspectRatio="none" aria-hidden="true">
+        <defs><marker id="court-arrow" markerWidth="5" markerHeight="5" refX="11" refY="2.5" orient="auto"><path d="M 0 0 L 5 2.5 L 0 5 Z" fill="#a99a83"></path></marker></defs>
+        <sc-for list="{{ graphEdges }}" as="e"><path data-edge="true" d="{{ e.path }}" stroke="{{ e.color }}" stroke-width="{{ e.width }}" stroke-dasharray="{{ e.dash }}" opacity="{{ e.opacity }}" class="{{ e.className }}" marker-end="url(#court-arrow)"></path></sc-for>
+      </svg>
+      <span class="mm-neutral-flag">{{ graphOpen }}</span>
+      <sc-for list="{{ graphNodes }}" as="n">
+        <div class="mm-court-actor {{ n.current }}" style="left:{{ n.left }};top:{{ n.top }};">
+          <sc-if value="{{ n.speaking }}"><button class="mm-actor-speech {{ n.bubbleSide }}" onClick="{{ n.inspect }}">{{ n.text }} <span aria-hidden="true">↗</span></button></sc-if>
+          <button class="mm-actor-body" onClick="{{ n.inspect }}" aria-label="{{ n.label }}" title="{{ n.label }}">
+            <span class="mm-actor-face" style="background:radial-gradient(circle at 36% 28%,#fff,{{ n.bg }});box-shadow:0 0 0 3px {{ n.color }},4px 5px 0 rgba(0,0,0,.4);animation:{{ n.motion }};">{{ n.head }}</span>
+            <span class="mm-actor-shadow"></span><span class="mm-actor-name">{{ n.name }}</span>
           </button>
         </div>
       </sc-for>
@@ -387,28 +557,6 @@
         </sc-if>
       </div>
       </sc-if>
-      <!-- featured duel · two-hander -->
-      <div style="position:absolute; left:50%; bottom:158px; transform:translateX(-50%); z-index:9; max-width:310px; width:max-content;">
-        <div style="position:relative; background:#f7f4ec; color:#2b2733; border:4px solid #2b2733; border-radius:16px; box-shadow:5px 5px 0 rgba(0,0,0,.45); padding:10px 14px; font:400 17px/1.35 {{ dispFont }}; text-align:center;">{{ duelLine }}
-          <span style="position:absolute; right:-14px; top:-16px; color:#a4726a; font-size:24px; -webkit-text-stroke:2px #2b2733; animation:sparkle 1.2s ease-in-out infinite;">💢</span>
-          <div style="position:absolute; left:{{ duelTailLeft }}; bottom:-15px; width:0; height:0; border-left:8px solid transparent; border-right:13px solid transparent; border-top:15px solid #2b2733;"></div>
-        </div>
-      </div>
-      <div style="position:absolute; left:0; right:0; bottom:12px; z-index:8; display:flex; justify-content:center; align-items:flex-end; gap:40px;">
-        <div style="display:flex; flex-direction:column; align-items:center; gap:5px;">
-          <div style="width:82px; height:82px; border-radius:50%; border:4px solid #2b2733; background:radial-gradient(circle at 36% 28%, #fff, {{ duelL.bg }}); box-shadow:0 0 0 5px #a4726a, 5px 6px 0 rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; font-size:48px; animation:{{ duelLeftAnim }};">{{ duelL.head }}</div>
-          <span style="background:#a4726a; color:#f1ede4; border:2.5px solid #f1ede4; border-radius:9px; font:400 11px/1.2 {{ dispFont }}; padding:3px 8px; white-space:nowrap;">{{ duelL.name }}</span>
-        </div>
-        <div style="display:flex; flex-direction:column; align-items:center; gap:3px; padding-bottom:26px;">
-          <span style="font-size:24px; animation:sparkle 1s ease-in-out infinite; filter:drop-shadow(2px 2px 0 rgba(0,0,0,.5));">⚡</span>
-          <div style="width:32px; height:32px; border-radius:50%; border:3px solid #f1ede4; background:#2b2733; display:flex; align-items:center; justify-content:center; font:400 11px/1 'Lilita One',sans-serif; color:#f1ede4; box-shadow:2px 2px 0 rgba(0,0,0,.4);">VS</div>
-        </div>
-        <div style="display:flex; flex-direction:column; align-items:center; gap:5px;">
-          <div style="width:82px; height:82px; border-radius:50%; border:4px solid #2b2733; background:radial-gradient(circle at 36% 28%, #fff, {{ duelR.bg }}); box-shadow:0 0 0 5px #b2a181, 5px 6px 0 rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; font-size:48px; animation:{{ duelRightAnim }};">{{ duelR.head }}</div>
-          <span style="background:#b2a181; color:#2b2733; border:2.5px solid #f1ede4; border-radius:9px; font:400 11px/1.2 {{ dispFont }}; padding:3px 8px; white-space:nowrap;">{{ duelR.name }}</span>
-        </div>
-      </div>
-    </div>
     <!-- intervention sheet -->
     <sc-if value="{{ itvOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeItv }}" style="position:absolute; inset:0; z-index:45; background:rgba(28,26,32,.55); display:flex; flex-direction:column; justify-content:flex-end;">
@@ -419,7 +567,7 @@
         </div>
         <div style="margin-top:14px; display:flex; flex-direction:column; gap:10px;">
           <sc-for list="{{ itvOptions }}" as="o" hint-placeholder-count="3">
-            <button onClick="{{ o.pick }}" style="all:unset; display:flex; align-items:center; gap:12px; background:#f7f4ec; border:3px solid #2b2733; border-radius:14px; box-shadow:3.5px 3.5px 0 #2b2733; padding:11px 14px; cursor:pointer;" style-active="transform:translate(2px,2px); box-shadow:1.5px 1.5px 0 #2b2733;">
+            <button onClick="{{ o.pick }}" disabled="{{ itvBusy }}" style="all:unset; display:flex; align-items:center; gap:12px; background:#f7f4ec; border:3px solid #2b2733; border-radius:14px; box-shadow:3.5px 3.5px 0 #2b2733; padding:11px 14px; cursor:pointer;" style-active="transform:translate(2px,2px); box-shadow:1.5px 1.5px 0 #2b2733;">
               <span style="font-size:26px;">{{ o.icon }}</span>
               <span style="flex:1;">
                 <span style="display:block; font:400 17px/1.2 {{ dispFont }};">{{ o.label }}</span>
@@ -435,45 +583,46 @@
           <span style="flex:1; height:2px; background:rgba(43,39,51,.22);"></span>
         </div>
         <div style="margin-top:10px; display:flex; gap:8px;">
-          <input value="{{ itvCustom }}" onChange="{{ itvCustomChange }}" placeholder="{{ t.itvCustomPh }}" style="flex:1; min-width:0; border:3px solid #2b2733; border-radius:12px; background:#f7f4ec; padding:11px 12px; font:600 14px 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#2b2733; outline:none; box-shadow:2.5px 2.5px 0 #2b2733;">
-          <button onClick="{{ itvCustomGo }}" style="all:unset; background:#a4726a; color:#f1ede4; border:3px solid #2b2733; border-radius:12px; box-shadow:2.5px 2.5px 0 #2b2733; padding:0 16px; display:flex; align-items:center; cursor:pointer;" style-active="transform:translate(2px,2px); box-shadow:.5px .5px 0 #2b2733;"><span style="font:400 16px/1 {{ dispFont }}; letter-spacing:2px;">{{ t.itvCustomBtn }}</span></button>
+          <input value="{{ itvCustom }}" onChange="{{ itvCustomChange }}" maxLength="{{ 200 }}" aria-label="{{ t.itvCustomPh }}" placeholder="{{ t.itvCustomPh }}" style="flex:1; min-width:0; border:3px solid #2b2733; border-radius:12px; background:#f7f4ec; padding:11px 12px; font:600 14px 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#2b2733; outline:none; box-shadow:2.5px 2.5px 0 #2b2733;">
+          <button onClick="{{ itvCustomGo }}" disabled="{{ customDisabled }}" style="all:unset; background:#a4726a; color:#f1ede4; border:3px solid #2b2733; border-radius:12px; box-shadow:2.5px 2.5px 0 #2b2733; padding:0 16px; display:flex; align-items:center; cursor:pointer;" style-active="transform:translate(2px,2px); box-shadow:.5px .5px 0 #2b2733;"><span style="font:400 16px/1 {{ dispFont }}; letter-spacing:2px;">{{ t.itvCustomBtn }}</span></button>
         </div>
         <button onClick="{{ closeItv }}" style="all:unset; display:block; width:100%; text-align:center; margin-top:12px; font:400 14px/1.2 {{ dispFont }}; color:#847d88; letter-spacing:2px; cursor:pointer;">{{ t.itvCancel }}</button>
       </div>
     </div>
     </sc-if>
-    <!-- storyboard -->
-    <div style="padding:13px 18px calc(15px + env(safe-area-inset-bottom)); border-top:4px solid #f1ede4;">
-      <div style="display:flex; justify-content:space-between; align-items:baseline;">
-        <span style="font:800 10.5px/1 'Baloo 2',sans-serif; letter-spacing:2px; color:#a9a3ab;">{{ t.sbLabel }}</span>
-        <span style="font:400 13px/1 {{ altFont }}; color:#b2a181;">{{ actNo }}</span>
-      </div>
-      <div style="margin-top:10px; display:flex; gap:8px;">
-        <sc-for list="{{ acts }}" as="a" hint-placeholder-count="5">
-          <button onClick="{{ a.go }}" style="all:unset; flex:1; text-align:center; padding:8px 0 9px; border:3px solid {{ a.bd }}; border-radius:12px; background:{{ a.bg }}; color:{{ a.fg }}; cursor:pointer; box-shadow:{{ a.shadow }};">
-            <div style="font:400 16px/1 'Lilita One',sans-serif;">{{ a.no }}</div>
-            <div style="margin-top:3px; font:400 11px/1.1 {{ dispFont }}; letter-spacing:1px;">{{ a.label }}</div>
-          </button>
-        </sc-for>
-      </div>
-      <div style="margin-top:12px; display:flex; gap:8px;">
-        <button onClick="{{ openItv }}" style="all:unset; flex:1.3; background:#b2a181; color:#2b2733; border:3px solid #f1ede4; border-radius:14px; box-shadow:4px 4px 0 rgba(0,0,0,.4); text-align:center; padding:13px 0; cursor:pointer; animation:wiggle 1.7s ease-in-out infinite;"><span style="font:400 16px/1.1 {{ dispFont }}; letter-spacing:1px;">🖐 {{ t.intervene }}</span></button>
-        <button onClick="{{ playCut }}" style="all:unset; flex:1; background:#a4726a; color:#f1ede4; border:3px solid #f1ede4; border-radius:14px; box-shadow:4px 4px 0 rgba(0,0,0,.4); text-align:center; padding:13px 0; cursor:pointer;"><span style="font:400 16px/1.1 {{ dispFont }}; letter-spacing:1px;">🎬 {{ t.closeupBtn }}</span></button>
-        <button onClick="{{ go5 }}" style="all:unset; flex:1; border:3px solid rgba(241,237,228,.55); border-radius:14px; color:#f1ede4; text-align:center; padding:13px 0; cursor:pointer; animation:{{ ruleAnim }};"><span style="font:400 16px/1.1 {{ dispFont }}; letter-spacing:1px;">👑 {{ t.ruleNow }}</span></button>
+    </div>
+          <sc-if value="{{ graphFocus }}"><p class="mm-graph-focus">{{ graphFocus }}</p></sc-if>
+        </section>
+        <section class="mm-focus-card mm-compact-chat" aria-label="{{ chatTitle }}">
+          <h2>{{ chatTitle }}</h2>
+          <div class="mm-chat-body" role="log" aria-label="{{ chatTitle }}">
+            <sc-if value="{{ chatEmpty }}"><p>{{ chatEmptyLabel }}</p></sc-if>
+            <sc-for list="{{ chatRows }}" as="q"><button class="mm-chat-row {{ q.current }}" onClick="{{ q.open }}" aria-label="{{ q.routeLabel }}"><span class="mm-chat-avatar">{{ q.head }}</span><span class="mm-chat-message"><b>{{ q.name }}</b><small>{{ q.target }} {{ q.action }}</small><p>{{ q.text }}</p></span><span class="mm-chat-expand" aria-hidden="true">↗</span></button></sc-for>
+          </div>
+        </section>
       </div>
     </div>
-  </div>
+  </section>
   </sc-if>
-
+  <sc-if value="{{ routeOn }}"><dialog class="mm-route-dialog" id="court-route" aria-label="{{ routeTitle }}" onCancel="{{ routeCancel }}">
+    <div class="mm-route-head"><h2>{{ routeTitle }}</h2><button onClick="{{ closeRoute }}">{{ closeLabel }}</button></div>
+    <div class="mm-route-chain"><sc-for list="{{ routeSteps }}" as="r"><span>{{ r.text }}</span></sc-for></div>
+    <b>{{ routeSpeaker }}</b><p>{{ routeText }}</p>
+    <h3>{{ routeReasonLabel }}</h3><p>{{ routeReason }}</p><sc-if value="{{ routeBasis }}"><small>{{ routeBasis }}</small></sc-if>
+    <sc-if value="{{ routeEvidence }}"><h3>{{ routeEvidenceLabel }}</h3><blockquote>{{ routeEvidence }}</blockquote></sc-if>
+    <sc-if value="{{ routeParent }}"><h3>{{ routeParentLabel }}</h3><blockquote>{{ routeParent }}</blockquote></sc-if>
+    <sc-if value="{{ routeResult }}"><h3>{{ routeRuleLabel }}</h3><p>{{ routeResult }}</p><p>{{ routeCauses }}</p><p>{{ routeRule }}</p></sc-if>
+  </dialog></sc-if>
   <!-- ============================== SCREEN 5 · VERDICT ============================== -->
   <sc-if value="{{ scr5 }}" hint-placeholder-val="{{ false }}">
-  <div data-screen-label="05 判决" style="position:absolute; inset:0; display:flex; flex-direction:column; background:#a4726a; color:#f1ede4;">
+  <div class="mm-verdict" data-screen-label="05 判决" style="position:absolute; inset:0; display:flex; flex-direction:column; background:#a4726a; color:#f1ede4;">
+    <sc-if value="{{ fallbackOn }}"><p role="status" style="margin:0; padding:8px 16px; background:#70463f; font:600 12px/1.5 sans-serif;">{{ fallbackText }}</p></sc-if>
     <div style="position:absolute; left:50%; top:38%; width:1000px; height:1000px; background:repeating-conic-gradient(rgba(241,237,228,.13) 0deg 8deg, transparent 8deg 16deg); border-radius:50%; animation:burstSpin 26s linear infinite;"></div>
     <div style="padding:calc(16px + env(safe-area-inset-top)) 18px 0; display:flex; justify-content:space-between; align-items:center; font:800 11px/1 'Baloo 2',sans-serif; letter-spacing:1.5px; position:relative;">
       <span>{{ t.verKicker }}</span>
       <span style="background:#2b2733; border:2.5px solid #f1ede4; border-radius:10px; padding:4px 9px; transform:rotate(-2deg);">{{ t.verChip }}</span>
     </div>
-    <div style="flex:1; position:relative; padding:14px 38px 14px 18px; display:flex; flex-direction:column; justify-content:center; overflow-y:auto;">
+    <div class="mm-verdict-content" style="flex:1; position:relative; padding:14px 38px 14px 18px; display:flex; flex-direction:column; justify-content:center; overflow-y:auto;">
       <span style="position:absolute; right:20px; top:24px; color:#b2a181; font-size:30px; -webkit-text-stroke:2px #2b2733; animation:sparkle 1.3s ease-in-out infinite;">✦</span>
       <span style="position:absolute; left:16px; bottom:30px; color:#b2a181; font-size:22px; -webkit-text-stroke:2px #2b2733; animation:sparkle 1.7s .4s ease-in-out infinite;">✦</span>
       <div style="position:relative; animation:riseIn .6s cubic-bezier(.2,.9,.2,1) both;">
@@ -548,28 +697,77 @@
       </div>
     </div>
     <div style="display:flex; position:relative;">
-      <button onClick="{{ noopBtn }}" style="all:unset; flex:1.4; background:#2b2733; color:#f1ede4; text-align:center; padding:18px 0 calc(18px + env(safe-area-inset-bottom)); cursor:pointer;"><span style="font:400 21px/1.1 {{ dispFont }}; letter-spacing:{{ t.ctaSpacing }};">🎴 {{ t.collectMain }}</span></button>
+      <button onClick="{{ exportVerdict }}" disabled="{{ exportDisabled }}" style="all:unset; flex:1.4; background:#2b2733; color:#f1ede4; text-align:center; padding:18px 0 calc(18px + env(safe-area-inset-bottom)); cursor:pointer;"><span style="font:400 21px/1.1 {{ dispFont }}; letter-spacing:{{ t.ctaSpacing }};">↓ {{ exportLabel }}</span></button>
       <button onClick="{{ go1 }}" style="all:unset; flex:1; background:#b2a181; color:#2b2733; text-align:center; padding:18px 0 calc(18px + env(safe-area-inset-bottom)); cursor:pointer;"><span style="font:400 21px/1.1 {{ dispFont }}; letter-spacing:{{ t.ctaSpacing }};">{{ t.tomorrow }} →</span></button>
     </div>
   </div>
   </sc-if>
 
   <!-- ============================== FLOATING CONTROLS ============================== -->
-  <div style="position:absolute; top:50%; right:calc(6px + env(safe-area-inset-right)); transform:translateY(-50%); z-index:40; display:flex; flex-direction:column; gap:7px; align-items:center;">
+  <sc-if value="{{ accessRequired }}">
+    <div class="mm-access-shade"><form class="mm-access-form" role="dialog" aria-modal="true" aria-label="{{ accessTitle }}" onSubmit="{{ accessSubmit }}">
+      <h2>{{ accessTitle }}</h2><p>{{ accessHint }}</p>
+      <input type="password" autoComplete="current-password" value="{{ accessPassword }}" onInput="{{ accessChange }}" aria-label="{{ accessTitle }}" maxLength="{{ 256 }}" autoFocus="{{ true }}">
+      <sc-if value="{{ accessError }}"><p role="alert">{{ accessError }}</p></sc-if>
+      <button type="submit" disabled="{{ accessBusy }}">{{ accessButton }}</button>
+    </form></div>
+  </sc-if>
+  <sc-if value="{{ noticeOn }}">
+    <div role="status" style="position:absolute; top:8px; left:12px; right:40px; z-index:55; padding:12px; border:2px solid #b2a181; border-radius:12px; background:#2b2733; color:#f1ede4; font:600 14px/1.5 sans-serif; overflow-wrap:anywhere;">{{ noticeText }}
+      <sc-if value="{{ noCourt }}"><button onClick="{{ go3 }}" style="display:block; margin-top:12px; padding:10px; cursor:pointer;">{{ petitionLabel }}</button></sc-if>
+    </div>
+  </sc-if>
+  <sc-if value="{{ legacyNavOn }}">
+  <div class="mm-page-nav" style="position:absolute; top:50%; right:calc(6px + env(safe-area-inset-right)); transform:translateY(-50%); z-index:40; display:flex; flex-direction:column; gap:7px; align-items:center;">
     <button onClick="{{ toggleLang }}" title="{{ t.langTip }}" style="all:unset; width:26px; padding:7px 0; border-radius:13px; border:2.5px solid {{ langBd }}; background:{{ langBg }}; color:{{ langFg }}; font:800 10px/1.1 'Baloo 2','ZCOOL KuaiLe',sans-serif; text-align:center; cursor:pointer; box-shadow:2px 2px 0 rgba(43,39,51,.35); margin-bottom:5px;">{{ langBtnLabel }}</button>
     <sc-for list="{{ dots }}" as="d" hint-placeholder-count="5">
-      <button onClick="{{ d.go }}" title="{{ d.label }}" style="all:unset; width:24px; height:24px; border-radius:50%; border:2.5px solid {{ d.bd }}; background:{{ d.bg }}; color:{{ d.fg }}; font:800 9px/24px 'Baloo 2',sans-serif; text-align:center; cursor:pointer; box-shadow:{{ d.shadow }};">{{ d.no }}</button>
+      <button onClick="{{ d.go }}" title="{{ d.label }}" style="all:unset; width:24px; height:24px; border-radius:50%; border:2.5px solid {{ d.bd }}; background:{{ d.bg }}; color:{{ d.fg }}; font:800 9px/24px 'Baloo 2',sans-serif; text-align:center; cursor:pointer; box-shadow:{{ d.shadow }};"><span>{{ d.no }}</span><span class="mm-nav-caption">{{ d.label }}</span></button>
     </sc-for>
   </div>
+  </sc-if>
 
 </div>
 </div>
 
-<!-- ============ DESKTOP ONLY · 右栏：朕的心事 + 朝堂实录 ============ -->
-<sc-if value="{{ wideOn }}" hint-placeholder-val="{{ false }}">
+<!-- ============ 朕的心事 + 朝堂实录：窄屏移到朝堂下方 ============ -->
+<sc-if value="{{ railOn }}" hint-placeholder-val="{{ false }}">
 <div class="mm-rail">
+<section class="mm-panel" id="court-factor-wall" aria-label="{{ wallTitle }}">
+  <h2>🧩 {{ wallTitle }}</h2><p>{{ wallHint }}</p>
+  <sc-if value="{{ factorsEmpty }}"><p>{{ wallEmpty }}</p></sc-if>
+  <sc-for list="{{ factorRows }}" as="f">
+    <div class="{{ f.className }}"><small>{{ f.label }} · {{ f.state }}</small><span>{{ f.text }}</span>
+      <button onClick="{{ f.toggle }}" disabled="{{ factorBusy }}">{{ f.action }}</button>
+    </div>
+  </sc-for>
+  <div style="display:flex; gap:6px; margin-top:8px;">
+    <select value="{{ factorKind }}" onChange="{{ factorKindChange }}" aria-label="{{ wallTitle }}">
+      <sc-for list="{{ factorKinds }}" as="o"><option value="{{ o.value }}" label="{{ o.label }}">{{ o.label }}</option></sc-for>
+    </select>
+    <input value="{{ factorText }}" onInput="{{ factorChange }}" maxLength="{{ 160 }}" placeholder="{{ factorPlaceholder }}" aria-label="{{ factorPlaceholder }}">
+    <button onClick="{{ factorSubmit }}" disabled="{{ factorDisabled }}">{{ addFactorLabel }}</button>
+  </div>
+  <button onClick="{{ reconsider }}" disabled="{{ factorBusy }}" style="margin-top:8px; width:100%;">{{ reconsiderLabel }}</button>
+</section>
+<section class="mm-panel" aria-label="{{ timelineTitle }}">
+  <h2>🧭 {{ timelineTitle }}</h2><p>{{ allianceText }}</p>
+  <button onClick="{{ clearWatch }}">{{ clearWatchLabel }}</button>
+  <details style="margin-top:8px;"><summary>{{ t.logStance.pro }} / {{ t.logStance.con }} · {{ timelineTitle }}</summary>
+    <sc-for list="{{ trailRows }}" as="v"><button class="mm-trail" onClick="{{ v.track }}">{{ v.name }}：{{ v.path }}</button></sc-for>
+  </details>
+  <div class="mm-events" role="log" aria-label="{{ timelineTitle }}">
+    <sc-if value="{{ noEvents }}"><p>{{ noEventsText }}</p></sc-if>
+    <sc-for list="{{ eventRows }}" as="e">
+      <article class="mm-event"><b>{{ e.title }}</b><p><strong>{{ e.result }}</strong></p>
+        <p>{{ e.why }}</p><sc-if value="{{ e.ruleText }}"><details><summary>{{ e.ruleLabel }}</summary><p>{{ e.ruleText }}</p></details></sc-if><button onClick="{{ e.jump }}">{{ e.cause }}</button>
+        <button onClick="{{ e.track }}">{{ e.trackLabel }}</button>
+      </article>
+    </sc-for>
+  </div>
+</section>
 
-<section class="mm-mind" aria-label="{{ t.mindTitle }}">
+
+<details class="mm-mind"><summary style="padding:12px; cursor:pointer; color:#d8c9a4;">🦝 {{ t.mindTitle }}</summary>
   <h2 class="mm-log-head">
     <span style="font:400 22px/1.1 {{ dispFont }}; letter-spacing:2px; color:#f1ede4;">🦝 {{ t.mindTitle }}</span>
     <span style="font:800 11px/1 'Baloo 2',sans-serif; letter-spacing:1.5px; color:#b2a181;">{{ t.mindBy }}</span>
@@ -585,7 +783,7 @@
     </sc-for>
     <button class="mm-mind-save" onClick="{{ mindSave }}" disabled="{{ mindClean }}">{{ t.mindSave }}</button>
   </div>
-</section>
+</details>
 
 <section class="mm-log" aria-label="{{ t.logTitle }}">
   <h2 class="mm-log-head">
@@ -597,7 +795,7 @@
       <p style="margin:auto 0; text-align:center; font:600 14px/1.7 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#a9a3ab;">{{ t.logEmpty }}</p>
     </sc-if>
     <sc-for list="{{ transcript }}" as="q" hint-placeholder-count="3">
-      <article style="flex:none; display:flex; gap:10px; padding:10px 12px; border-left:5px solid {{ q.stance }}; border-radius:4px 12px 12px 4px; background:{{ q.rowBg }};">
+      <article id="{{ q.anchor }}" style="flex:none; display:flex; gap:10px; padding:10px 12px; border-left:5px solid {{ q.stance }}; border-radius:4px 12px 12px 4px; background:{{ q.rowBg }};">
         <span aria-hidden="true" style="flex:none; width:34px; height:34px; border-radius:50%; border:2.5px solid #f1ede4; background:rgba(241,237,228,.1); display:flex; align-items:center; justify-content:center; font-size:20px;">{{ q.head }}</span>
         <div style="min-width:0;">
           <div style="display:flex; flex-wrap:wrap; align-items:baseline; gap:8px;">
@@ -605,6 +803,8 @@
             <span style="font:800 10px/1.2 'Baloo 2',sans-serif; letter-spacing:1.2px; color:#a9a3ab;">{{ q.meta }}</span>
           </div>
           <p style="margin:5px 0 0; font:600 14px/1.55 'Baloo 2','ZCOOL KuaiLe',sans-serif; color:#f1ede4; overflow-wrap:anywhere;">{{ q.text }}</p>
+          <sc-if value="{{ q.reason }}"><p style="margin:6px 0; font:12px/1.5 sans-serif; color:#d8c9a4;">{{ q.reason }}</p></sc-if>
+          <sc-if value="{{ q.evidence }}"><small style="color:#bfb1c7;">{{ q.basis }}</small><p style="font:12px/1.5 sans-serif; color:#ccc;">“{{ q.evidence }}”</p></sc-if>
           <sc-if value="{{ q.canNote }}" hint-placeholder-val="{{ true }}">
             <button onClick="{{ q.note }}" style="all:unset; margin-top:6px; cursor:pointer; border:2px solid rgba(241,237,228,.35); border-radius:8px; padding:3px 9px; font:800 10px/1.4 'Baloo 2','ZCOOL KuaiLe',sans-serif; letter-spacing:1px; color:#d8c9a4;">{{ q.noteLabel }}</button>
           </sc-if>
@@ -630,11 +830,11 @@ class Component extends DCLogic {
             topic: '', ctx: '', sid: null, live: null, feed: [], phase: 'idle', err: '', wide: false,
             mindEdit: {},    // 心事的本地草稿：没按「改定」之前不发给后端
             leanOpen: 0,     // 递奏章时的倾向，开堂那一下送出去，之后不再问
-            noted: {} };     // 这一轮点过御笔的行，只用来把按钮改成「已收」
+            noted: {}, paused: false, activeTurn: null, emperorText: '', emperorKind: 'question',
+            emperorTarget: '', factorText: '', factorKind: 'risk', watch: '', showGroup: false };
 
   // ---- 后端 ----
-  // phase: idle 还没开堂 · opening 等十一位大臣表态 · debating 直播中 · recess 辩完待裁决 · offline 后端不在
-  // live === null 时整个界面退回原来那套写死的演示数据，所以这个文件单独打开仍然是一份完整的设计稿。
+  // 没有真实朝会数据时显示等待或错误，不播放预设辩论。
 
   apiBase() { return location.protocol === 'file:' ? 'http://127.0.0.1:8010' : ''; }
 
@@ -642,8 +842,25 @@ class Component extends DCLogic {
     const r = await fetch(this.apiBase() + path, body
       ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
       : undefined);
+    if (r.status === 401) {
+      this.pausePlayback();
+      this.setState({accessRequired:true});
+      throw new Error(this.state.lang === 'zh' ? '请先输入朝堂访问口令。' : 'Enter the court access password first.');
+    }
     if (!r.ok) throw new Error((await r.text()).slice(0, 200));
     return r.json();
+  }
+
+  async unlockCourt() {
+    if (this.state.accessBusy || !(this.state.accessPassword || '').trim()) return;
+    this.setState({accessBusy:true,accessError:''});
+    try {
+      const r = await fetch(this.apiBase() + '/api/access', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:this.state.accessPassword})});
+      if (!r.ok) throw new Error(r.status === 429 ? '尝试过多，请五分钟后重试。' : '口令不正确，请重试。');
+      this.setState({accessRequired:false,accessBusy:false,accessPassword:'',err:'',...(!this.state.live ? {screen:3,phase:'idle'} : {})});
+    } catch (e) {
+      this.setState({accessBusy:false,accessError:String(e.message || e)});
+    }
   }
 
   async startCourt() {
@@ -651,16 +868,24 @@ class Component extends DCLogic {
     const topic = (this.state.topic || '').trim();
     if (!topic) { this.setState({ err: zh ? '先写下今天要裁决的事。' : 'Write today’s petition first.' }); return; }
     this.closeStream();
-    this.setState({ screen: 4, phase: 'opening', err: '', feed: [], live: null, sid: null });
+    const run = this._run;
+    this.setState({ screen: 4, phase: 'opening', err: '', feed: [], live: null, sid: null,
+                    paused: false, activeTurn: null, cut: null, noted: {}, mindEdit: {}, itvBusy: false, itvOpen: false, itv: null, poke: null, generating: false, replying: false, actionNotice: '', emperorText: '', showGroup: false, groupPreference: null, routeSeq: null, theater: false, graphWatch: null });
     try {
       const s = await this.api('/api/court', { topic, context: this.state.ctx,
                                                lang: this.state.lang,
                                                lean_open: Number(this.state.leanOpen) || 0 });
-      this.setState({ sid: s.id, live: s, phase: 'debating' });
-      this.openStream(s.id, s.turns.length);
+      if (run !== this._run) return;
+      this.setState({ sid: s.id, phase: 'debating' });
+      if (typeof history !== 'undefined' && typeof location !== 'undefined') {
+        const params = new URLSearchParams(location.search); params.set('court', s.id);
+        history.replaceState(null, '', location.pathname + '?' + params.toString());
+      }
+
+      this.acceptSnapshot(s);
     } catch (e) {
-      // 后端没起来不该白屏：退回演示朝堂，只在奏章屏留一句人话
-      this.setState({ phase: 'offline', err: (zh ? '朝堂离线，正在放演示：' : 'Court offline, showing demo: ') + (e.message || e) });
+      if (run !== this._run) return;
+      this.setState({ phase: 'offline', err: zh ? '无法连接朝堂。请启动后端后重新呈递奏章。' : 'Court unavailable. Start the backend and submit the petition again.' });
     }
   }
 
@@ -698,12 +923,15 @@ class Component extends DCLogic {
   // 御笔批注落后端，不落 localStorage：它的价值在跨局 —— 攒够了才看得出你总是收藏谁。
   async saveNote(minister, text) {
     if (!this.state.sid || !text) return;
+    const run = this._run;
     const key = minister + '|' + text;
     this.setState(st => ({ noted: Object.assign({}, st.noted, { [key]: true }) }));
     try {
       const live = await this.api('/api/court/' + this.state.sid + '/note', { minister, text });
-      this.setState({ live });
+      if (run !== this._run) return;
+      this.acceptSnapshot(live);
     } catch (e) {
+      if (run !== this._run) return;
       this.setState(st => {
         const n = Object.assign({}, st.noted); delete n[key];
         return { noted: n, err: String(e.message || e) };
@@ -713,50 +941,278 @@ class Component extends DCLogic {
 
   async saveMind() {
     if (!this.state.sid) return;
+    const run = this._run;
     const body = {};
     this.mindFields().forEach(f => { body[f.key] = this.mindValue(f.key); });
     try {
       const live = await this.api('/api/court/' + this.state.sid + '/mind', body);
-      this.setState({ live, mindEdit: {} });
+      if (run !== this._run) return;
+      this.acceptSnapshot(live);
+      this.setState({ mindEdit: {} });
     } catch (e) {
+      if (run !== this._run) return;
       this.setState({ err: String(e.message || e) });
     }
   }
 
-  openStream(sid, after) {
-    this.closeStream();
-    const es = new EventSource(this.apiBase() + '/api/court/' + sid + '/stream?after=' + (after || 0));
-    this._es = es;
-    es.addEventListener('turn', e => {
-      const t = JSON.parse(e.data);
-      this.setState(st => ({ feed: st.feed.concat(t).slice(-24) }));
-    });
-    es.addEventListener('state', e => this.setState({ live: JSON.parse(e.data) }));
-    es.addEventListener('done', () => { this.closeStream(); this.setState({ phase: 'recess' }); });
-    es.addEventListener('error', e => {
-      this.closeStream();
-      let m = ''; try { m = JSON.parse(e.data).message; } catch (x) {}
-      this.setState({ phase: 'recess', err: m });
-    });
-    // EventSource 自身的 onerror（断网、后端挂了）没有 data，不能和上面的业务 error 混为一谈
-    es.onerror = () => { this.closeStream(); this.setState({ phase: 'offline' }); };
+  // 一句读完再显示下一句；整轮读完才请求下一轮，给干预留下真正生效的窗口。
+  acceptSnapshot(s) {
+    if (s.id !== this.state.sid) return;
+    if (this.state.live && s.turns.length < this.state.live.turns.length) return;
+    if (['recess', 'ruled'].includes(this.state.phase)) {
+      this.setState({ live: s, feed: s.turns });
+      return;
+    }
+    this._queue = this._queue || [];
+    this._queue.push(...s.turns.filter(t => t.seq > (this._queuedSeq || 0)));
+    this._queuedSeq = Math.max(this._queuedSeq || 0, ...s.turns.map(t => t.seq));
+    if (!this.state.live || s.turns.length >= this.state.live.turns.length) this.setState({ live: s });
+    if (!this._playT) this.playNext();
   }
 
-  closeStream() { if (this._es) { this._es.close(); this._es = null; } }
+  playNext() {
+    if (this.state.paused || this.state.phase !== 'debating' || this.state.replying || this.state.itvBusy) return;
+    this._playT = null;
+    const turn = (this._queue || []).shift();
+    if (turn) {
+      const previous = this.state.feed.filter(t => t.minister === turn.minister).pop();
+      if (turn.kind === 'note') {
+        this.setState(st => ({ feed: st.feed.concat(turn) }));
+        this.playNext(); return;
+      }
+      this.setState(st => ({ activeTurn: turn, feed: st.feed.concat(turn) }));
+      this.animateTurn(turn, previous);
+      const detail = turn.detail || {};
+      this.scheduleLine(Math.max(5000, Math.min(16000, (turn.text.length + (detail.reason || '').length) * 150)));
+      return;
+    }
+    if (this._loading || !this.state.live) return;
+    if (!this.state.live.rounds_left) { this.setState({ phase: 'recess' }); return; }
+    this.beginRound();
+  }
+
+  scheduleLine(ms) {
+    clearTimeout(this._playT);
+    const epoch = this._playEpoch = (this._playEpoch || 0) + 1;
+    this._remaining = ms; this._playDue = Date.now() + ms;
+    this._playT = setTimeout(() => {
+      if (epoch !== this._playEpoch || this.state.paused) return;
+      this._playT = null; this._remaining = 0; this.playNext();
+    }, ms);
+  }
+
+  pausePlayback() {
+    if (this._playT) this._remaining = Math.max(0, this._playDue - Date.now());
+    clearTimeout(this._playT); this._playT = null;
+    clearTimeout(this._cutT); clearTimeout(this._itvT);
+    this._playEpoch = (this._playEpoch || 0) + 1;
+    this.setState({ paused: true, cut: null, itv: null });
+  }
+
+  beginRound(manual = false) {
+    if (!this._roundTask) {
+      const task = this.loadRound(manual);
+      this._roundTask = task;
+      task.finally(() => { if (this._roundTask === task) this._roundTask = null; });
+    }
+    return this._roundTask;
+  }
+
+  async loadRound(manual = false) {
+    const run = this._run;
+    this._loading = true;
+    this.setState({ generating: true });
+    try {
+      // 响应丢失时先读服务器进度，重试不能额外多跑一轮。
+      let s = await this.api('/api/court/' + this.state.sid);
+      if (run !== this._run) return;
+      if (s.turns.length <= (this._queuedSeq || 0) && s.rounds_left) {
+        if (this.state.paused && !manual) return;
+        s = await this.api('/api/court/' + this.state.sid + '/round', {});
+      }
+      if (run !== this._run) return;
+      this._loading = false;
+      if (s.turns.length <= (this._queuedSeq || 0) && s.rounds_left) {
+        this.setState({ live: s, phase: 'recess', err: this.state.lang === 'zh'
+          ? '本轮没有产生新发言，可直接裁决。' : 'No new lines this round. You may rule now.' });
+        return;
+      }
+      this.acceptSnapshot(s);
+    } catch (e) {
+      if (run !== this._run) return;
+      this._loading = false;
+      this.setState({ phase: 'offline', err: this.state.lang === 'zh'
+        ? '本轮生成失败。点击“重试”继续，已收到的发言仍可查看。'
+        : 'Round failed. Retry to continue; received lines are still available.' });
+    } finally {
+      if (run === this._run) { this._loading = false; this.setState({ generating: false }); }
+    }
+  }
+
+  togglePlayback() {
+    if (!['debating', 'offline'].includes(this.state.phase)) return;
+    if (!this.state.paused && this.state.phase !== 'offline') { this.pausePlayback(); return; }
+    if (this.state.phase === 'offline' && this.state.sid) {
+      this.setState({ phase: 'debating', paused: false, err: '' });
+    } else {
+      this.setState({ paused: false, cut: null, itv: null });
+    }
+    clearTimeout(this._playT); this._playT = null;
+    this._playEpoch = (this._playEpoch || 0) + 1;
+    if (this._remaining > 0) this.scheduleLine(this._remaining);
+    else this.playNext();
+  }
+
+  async stepLine() {
+    if (this.state.itvBusy || this.state.replying || this.state.generating) return;
+    this.pausePlayback();
+    const run = this._run, epoch = this._playEpoch;
+    if (!(this._queue || []).length && this.state.live && this.state.live.rounds_left) await this.beginRound(true);
+    if (run !== this._run || epoch !== this._playEpoch) return;
+    this._remaining = 0;
+    this.setState({ paused: false, cut: null }); this.playNext(); this.pausePlayback();
+  }
+
+  closeStream() {
+    this._run = (this._run || 0) + 1;
+    this._playEpoch = (this._playEpoch || 0) + 1; this._remaining = 0;
+    this._roundTask = null;
+    clearTimeout(this._playT); this._playT = null;
+    this._queue = []; this._queuedSeq = 0; this._loading = false;
+  }
+
+  animateTurn(turn, previous) {
+    if (turn.kind === 'floor' && this.state.groupPreference !== false) this.setState({ showGroup: true });
+    if (!this.minMeta()[turn.minister]) return;
+    clearTimeout(this._cutT);
+    if (['rebuttal','floor'].includes(turn.kind) && turn.target) {
+      this.setState({ cut: { mode: 'duo' }, duelTurn: 0 });
+    } else if ((previous && previous.stance !== turn.stance)
+               || this.signatureCue(turn.minister, turn.text)) {
+      this.showSolo(turn.minister);
+    } else {
+      this.setState({ cut: null });
+    }
+    clearTimeout(this._cutT);
+    this._cutT = setTimeout(() => this.setState({ cut: null }), 1500);
+  }
+
+  signatureCue(id, text) {
+    // 角色招牌动作仍在，但须由实际台词中的性格线索触发。
+    const cues = {
+      rabbit: /立刻|马上|现在|冲|行动|now|act|go!/i,
+      fox: /三思|风险|万一|后果|risk|what if|disaster/i,
+      horse: /赢|输|胜|比赛|win|lose|race/i,
+      raccoon: /去年|记得|记录|以前|账|last year|remember|record/i,
+      banana: /香蕉|不如|脑洞|灵感|banana|what if|idea/i,
+      snake: /卦|预兆|征兆|嘶|omen|sign|sss/i,
+      collie: /合同|条|规则|规定|clause|rule|contract/i,
+      moth: /茧|知道|资料|证据|cocoon|knew|evidence/i,
+      fish: /完了|要完|热搜|刷新|doom|feed|refresh/i,
+      sheep: /大家|哪边|跟着|多数|everyone|majority|follow/i,
+      octopus: /都|协调|同意|关系|agree|both|together/i,
+    };
+    return !!(cues[id] && cues[id].test(text));
+  }
+
+  navigate(n) {
+    if (n === 5 && (!this.state.live || !['recess', 'ruled'].includes(this.state.phase))) {
+      this.setState({ err: this.state.lang === 'zh' ? '请先听完本场辩论，再下裁决。' : 'Hear the debate before ruling.' });
+      return;
+    }
+    if (n !== 4 && this.state.phase === 'debating') {
+      this.pausePlayback();
+    }
+    this.setState({ screen: n, err: '' });
+  }
+
+  exportVerdict() {
+    const s = this.state.live;
+    if (!s || s.status !== 'decided') return;
+    const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'court-' + s.id + '.json';
+    a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  adoptInteraction(s) {
+    // 插话时把已生成但未播放的内容收进实录，保留原顺序；不把旧台词冒充新回应。
+    this._queue = []; this._queuedSeq = s.turns.length ? s.turns[s.turns.length - 1].seq : 0;
+    this._remaining = 0;
+    this.setState({ live: s, feed: s.turns, activeTurn: s.turns[s.turns.length - 1],
+                    cut: null, actionNotice: this.state.lang === 'zh'
+                      ? '插话前的内容已收进实录，可回看；众卿转而回应猫皇。'
+                      : 'Earlier lines are in the transcript. The ministers now respond to you.' });
+  }
+
+  async participate(path, body, reply, clearDraft) {
+    if (!this.state.sid || this.state.itvBusy || this.state.live.status === 'decided') return;
+    const run = this._run;
+    this.pausePlayback(); this.setState({ itvBusy: true, err: '' });
+    try {
+      if (this._roundTask) await this._roundTask;
+      if (run !== this._run) return;
+      const s = await this.api('/api/court/' + this.state.sid + path, body);
+      if (run !== this._run) return;
+      this.adoptInteraction(s);
+      this.setState(clearDraft || {});
+      if (reply) {
+        this.setState({ phase: 'debating', paused: false, replying: true, showGroup: true });
+        const answered = await this.api('/api/court/' + this.state.sid + '/respond', {});
+        if (run !== this._run) return;
+        this.setState({ itvBusy: false, replying: false, actionNotice: '' });
+        this.acceptSnapshot(answered);
+      } else {
+        this.setState({ itvBusy: false, paused: true, actionNotice: this.state.lang === 'zh'
+          ? '词条墙已更新。可继续朝议，或让众卿回应新的局势。'
+          : 'Factor wall updated. Resume or ask the court to reconsider.' });
+      }
+    } catch (e) {
+      if (run === this._run) this.setState({ itvBusy: false, replying: false, paused: true,
+        err: (this.state.lang === 'zh' ? '未完成回应：' : 'Reply incomplete: ') + String(e.message || e) });
+    }
+  }
+
+  sendEmperor() {
+    const text = (this.state.emperorText || '').trim();
+    if (!text) return;
+    return this.participate('/decree', { kind: this.state.emperorKind, text, target: this.state.emperorTarget || null },
+                            true, { emperorText: '' });
+  }
+
+  editFactor(item) {
+    const text = (this.state.factorText || '').trim();
+    if (!item && !text) return;
+    return this.participate('/factors', item ? { factor_id: item.id, active: !item.active }
+      : { text, kind: this.state.factorKind }, false, { factorText: '' });
+  }
 
   async rule(choice) {
+    if (!this.state.sid || this.state.phase !== 'recess') return;
     this.closeStream();
-    if (!this.state.sid) { this.setState({ screen: 5, phase: 'ruled' }); return; }
+    const run = this._run;
     this.setState({ phase: 'ruling' });
     try {
       const s = await this.api('/api/court/' + this.state.sid + '/verdict', { choice });
-      this.setState({ live: s, phase: 'ruled', screen: 5 });
+      if (run !== this._run) return;
+      this.setState({ live: s, feed: s.turns, phase: 'ruled', screen: 5, err: '' });
     } catch (e) {
-      this.setState({ phase: 'offline', err: String(e.message || e) });
+      if (run !== this._run) return;
+      this.setState({ phase: 'recess', err: String(e.message || e) });
     }
   }
 
   componentDidMount() {
+    // The original Pages URL stays the entry point; the hosted court serves its
+    // own UI and API together so login cookies do not depend on cross-site cookies.
+    const hosted = document.querySelector?.('meta[name="ministers-app"]')?.content;
+    if (hosted && location.hostname.endsWith('.github.io')) {
+      const target = new URL(hosted);
+      if (target.protocol === 'https:' && target.hostname !== location.hostname) {
+        target.search = location.search; target.hash = location.hash;
+        location.replace(target.href); return;
+      }
+    }
     const p = this.props.startScreen;
     if (p && p !== 'opening') {
       const map = { cast: 2, petition: 3, debate: 4, verdict: 5 };
@@ -766,39 +1222,15 @@ class Component extends DCLogic {
     try { lang = localStorage.getItem('mm_lang'); } catch (e) {}
     lang = lang || this.props.lang;
     if (lang === 'en' || lang === 'zh') this.setState({ lang });
-    this._duel = setInterval(() => this.setState(st => ({ duelTurn: (st.duelTurn + 1) % 4 })), 2800);
-    this._lobT = [];
-    const runLobby = () => {
-      const sc = this.state.fishCamp === 'pro' ? 'A' : 'B';
-      this.setState({ lobSc: sc, lobPhase: 1 });
-      this._lobT = [
-        setTimeout(() => this.setState({ lobPhase: 2 }), 1500),
-        setTimeout(() => this.setState({ lobPhase: 3 }), 3900),
-        setTimeout(() => this.setState({ lobPhase: 0, fishCamp: sc === 'A' ? 'con' : 'pro' }), 5700),
-      ];
-    };
-    this._lobI = setInterval(runLobby, 10000);
-    this._rot = setInterval(() => this.setState(st => ({ rotTick: (st.rotTick + 1) % 4 })), 7000);
-    // time-stop cut-ins: alternate duo clash (rotates the duel pair) and solo signature closeups
-    this._cutFlip = false;
-    this._soloIdx = 0;
-    this._cutI = setInterval(() => {
-      if (this.state.itvOpen || this.state.itv) return;
-      this._cutFlip = !this._cutFlip;
-      if (this._cutFlip) {
-        this.setState(st => ({ pairIdx: (st.pairIdx + 1) % 4, cut: { mode: 'duo' } }));
-        clearTimeout(this._cutT);
-        this._cutT = setTimeout(() => this.setState({ cut: null }), 2500);
-      } else {
-        this.showSolo();
-      }
-    }, 9500);
-    this._lobT.push(setTimeout(runLobby, 3000));
-    // 宽屏才挂朝堂实录；窄屏下 sc-if 直接不渲染，一个占位都不留
+    // 表演由发言与圣旨触发，不再按固定时间循环播放演示剧本。
     this._mq = window.matchMedia('(min-width:1024px)');
     this._onMq = () => this.setState({ wide: this._mq.matches });
     this._mq.addEventListener('change', this._onMq);
     this._onMq();
+    if (typeof location !== 'undefined' && typeof URLSearchParams !== 'undefined') {
+      const sid = new URLSearchParams(location.search).get('court');
+      if (sid && /^[a-f0-9]{12}$/i.test(sid)) this.resumeCourt(sid);
+    }
   }
 
   componentWillUnmount() {
@@ -816,27 +1248,37 @@ class Component extends DCLogic {
   }
 
   // ---- 把后端快照翻译成界面已有的那些变量名 ----
-  // 没有 live 就返回空对象，render() 里原来的演示值原样生效。
+  // 没有 live 就返回空对象；真实朝堂与裁决区须等后端返回数据。
 
   // t 是 renderVals 里的 i18n 字典，必须显式传进来：它不在这个方法的作用域里。
   // 之前这里直接写 t.xxx，离线演示永远走不到这几行，第一次真跑一局就 ReferenceError。
   liveView(t) {
-    const L = this.state.live;
-    if (!L) return {};
+    const snapshot = this.state.live;
+    if (!snapshot) return {};
+    // 阵营和票数也按已播放的发言推进，不能提前透露本轮尚未读到的倒戈。
+    const shown = {};
+    this.state.feed.forEach(t => { if (t.minister !== 'emperor' && t.kind !== 'verdict') shown[t.minister] = t; });
+    const ministers = snapshot.ministers.map(m => m.id === 'parrot' ? m : Object.assign({}, m, {
+      stance: shown[m.id] ? shown[m.id].stance : 'undecided',
+      influence: shown[m.id] ? shown[m.id].influence : m.influence,
+    }));
+    const tally = { pro:0, con:0, undecided:0 };
+    ministers.filter(m => m.id !== 'parrot').forEach(m => tally[m.stance]++);
+    const L = Object.assign({}, snapshot, { ministers, tally });
     const zh = this.state.lang === 'zh';
-    const meta = this.minMeta();
+    const meta = Object.assign({ emperor:{head:'😾',bg:'#ece6d8',zh:'猫皇',en:'EMPEROR'} }, this.minMeta());
     const ring = { pro: '#a4726a', con: '#b2a181', undecided: '#a9a3ab' };
     const nameOf = id => (meta[id] ? (zh ? meta[id].zh : meta[id].en) : id);
 
-    // 最近两句对呛决定台上的主角；没有就用影响力最高的一对
-    const said = this.state.feed.filter(f => f.kind === 'rebuttal' || f.kind === 'lobby');
-    const last = said[said.length - 1];
-    const prev = said[said.length - 2];
+    const said = this.state.feed.filter(f => meta[f.minister] && f.kind !== 'note');
+    const last = this.state.poke ? said.filter(f => f.minister === this.state.poke).pop()
+                                : this.state.activeTurn;
+    const prev = said.slice(0, -1).filter(f => !last || f.minister !== last.minister).pop();
     const byInf = st => L.ministers.filter(m => m.stance === st)
                         .sort((a, b) => b.influence - a.influence)[0];
-    const lid = (prev && meta[prev.minister]) ? prev.minister : ((byInf('pro') || L.ministers[0]).id);
-    const rid = (last && meta[last.minister] && last.minister !== lid) ? last.minister
-              : ((byInf('con') || L.ministers[1] || L.ministers[0]).id);
+    const lid = (last && meta[last.minister]) ? last.minister : ((byInf('pro') || L.ministers[0]).id);
+    const rid = (last && meta[last.target]) ? last.target
+              : (prev ? prev.minister : L.ministers.find(m => m.id !== lid).id);
 
     // 两侧列队：影响力高的站前排（越靠下越大）
     const place = (list, side) => list.map((m, i) => {
@@ -857,10 +1299,11 @@ class Component extends DCLogic {
     const plaza = place(camp('pro'), 'pro').concat(place(camp('con'), 'con'), mid).map(m => ({
       id: m.id, head: meta[m.id] ? meta[m.id].head : '❔', bg: meta[m.id] ? meta[m.id].bg : '#e8e0dc',
       ring: ring[m.stance], x: m.x, y: m.y, z: m.id === speaking ? 14 : m.z,
-      scale: m.scale, dur: m.dur, wander: 'none',
+      scale: m.scale, dur: m.dur, wander: m.id === 'sheep' && m.stance === 'undecided' ? 'wander 11s ease-in-out infinite' : 'none',
       poked: this.state.poke === m.id || m.id === speaking,
       line: m.id === speaking ? last.text : (this.state.poke === m.id ? this.lineOf(m.id) : ''),
-      sup: false, supLine: '',
+      sup: !!(shown[m.id] && shown[m.id].target === speaking),
+      supLine: shown[m.id] ? (zh ? '此前回应：' : 'Earlier reply: ') + shown[m.id].text : '',
       poke: () => this.pokeM(m.id),
       bLeft: m.side === 'con' ? 'auto' : (m.side === 'mid' ? '50%' : '0'),
       bRight: m.side === 'con' ? '0' : 'auto',
@@ -875,17 +1318,33 @@ class Component extends DCLogic {
 
     return {
       plaza,
+      speakingLabel: (zh ? '议题：' : 'PETITION: ') + L.topic + ' · '
+        + (last ? ((last.minister === 'emperor' ? (zh ? '猫皇' : 'EMPEROR') : nameOf(last.minister))
+          + ' · ' + (t.logKind[last.minister === 'emperor' ? ((last.detail || {}).move || last.kind) : last.kind] || last.kind)
+          + (meta[last.target] ? ' → ' + nameOf(last.target) : '')) : t.waitLine),
+      duelTailLeft: '24%',
+      hasResponse: !!(last && last.target && shown[last.target]),
+      responseLine: last && shown[last.target]
+        ? nameOf(last.target) + (zh ? '此前说：' : ' previously: ') + shown[last.target].text : '',
+      duelMark: last && last.kind === 'factor' ? '🧩' : (last && (last.minister === 'emperor' || last.target === 'emperor') ? '💬' : (last && last.kind === 'lobby' ? '🤝' : '⚡')),
+      duelRelation: last && (last.minister === 'emperor' || last.target === 'emperor') ? (zh ? '问答' : 'Q&A') : (last && last.kind === 'lobby' ? (zh ? '交涉' : 'TALK') : 'VS'),
+      duelLeftAnim: this.state.paused ? 'none' : (last && ['rebuttal','lobby'].includes(last.kind) ? 'lungeR .85s ease-in-out 2' : 'idleBob 2s ease-in-out infinite'),
+      duelRightAnim: this.state.paused ? 'none' : (last && last.kind === 'lobby' ? 'lungeL 1.1s ease-in-out 2'
+        : (last && last.kind === 'rebuttal' ? 'recoilR 1.1s ease-in-out 2' : 'idleBob 2s ease-in-out infinite')),
       proCount: pad(L.tally.pro), conCount: pad(L.tally.con),
       lobActive: !!(last && last.kind === 'lobby'),
       duelL: { head: meta[lid].head, bg: meta[lid].bg, name: nameOf(lid) },
       duelR: { head: meta[rid].head, bg: meta[rid].bg, name: nameOf(rid) },
+      duelLPoke: () => this.pokeM(lid), duelRPoke: () => this.pokeM(rid),
       duelLine: waiting ? (zh ? '「……朝堂正在集结」' : '"…THE COURT IS GATHERING"')
                         : (last ? last.text : (zh ? '「……」' : '"…"')),
       cutLHead: meta[lid].head, cutLBg: meta[lid].bg, cutLName: nameOf(lid),
       cutRHead: meta[rid].head, cutRBg: meta[rid].bg, cutRName: nameOf(rid),
+      cutCaption: this.state.cut && this.state.cut.id ? this.lineOf(this.state.cut.id) : (last ? last.text : ''),
       proN: String(L.tally.pro), conN: String(L.tally.con), absN: String(L.tally.undecided),
       decreeText: verdictTurn ? verdictTurn.text
-                : (zh ? '朕还未下旨。' : 'No decree yet.'),
+                : (this.state.phase === 'ruling' ? (zh ? '正在拟写判词……' : 'Preparing the decree…')
+                                                : (zh ? '朕还未下旨。' : 'No decree yet.')),
       // 判词是应声念的 —— 署名写出来，用户才知道这份恭维是谁给的
       decreeBy: verdictTurn && meta[verdictTurn.minister]
               ? (meta[verdictTurn.minister].head + ' ' + nameOf(verdictTurn.minister)
@@ -928,7 +1387,7 @@ class Component extends DCLogic {
                  + ' ' + nameOf(L.remonstrance.minister)
                  + ' · ' + (t.logStance[L.remonstrance.stance] || L.remonstrance.stance))
               : '',
-      needVerdict: L.status !== 'decided',
+      needVerdict: L.status !== 'decided' && this.state.phase === 'recess',
       ticketQuote: last ? last.text : L.topic,
       ticketByline: nameOf(last ? last.minister : loud.id) + ' · ' + L.topic,
       ticketHead: meta[last && meta[last.minister] ? last.minister : loud.id].head,
@@ -936,21 +1395,299 @@ class Component extends DCLogic {
   }
 
   lineOf(id) {
-    const t = (this.state.live.turns || []).filter(x => x.minister === id).pop();
+    const t = this.state.feed.filter(x => x.minister === id).pop();
     return t ? t.text : '……';
   }
 
-  pickItv(type, text) {
+  experienceView() {
+    const zh = this.state.lang === 'zh', L = this.state.live;
+    const meta = this.minMeta(), feed = this.state.feed || [];
+    const name = id => id === 'emperor' ? (zh ? '猫皇' : 'EMPEROR')
+      : (meta[id] ? (zh ? meta[id].zh : meta[id].en) : (zh ? '全场' : 'COURT'));
+    const moves = zh ? { opening:'开场', challenge:'质疑', answer:'回应猫皇', lobby:'游说', threaten:'威胁／施压',
+      ally:'结盟', defect:'拉拢背盟', question:'追问', fact:'补充事实', constraint:'提出约束', custom:'发言', factor:'词条变化' }
+      : { opening:'OPENING', challenge:'CHALLENGE', answer:'ANSWER', lobby:'LOBBY', threaten:'PRESSURE',
+        ally:'ALLIANCE', defect:'BREAK ALLIANCE', question:'QUESTION', fact:'FACT', constraint:'CONSTRAINT', custom:'SPEAK', factor:'FACTOR' };
+    const outcomes = zh ? { offer:'发起交涉', allied:'结盟成功', resisted:'顶住压力', flipped:'改变立场', defected:'背盟转向', added:'加入', cut:'切掉', restored:'恢复' }
+      : { offer:'OFFER', allied:'ALLIED', resisted:'RESISTED', flipped:'SWITCHED', defected:'DEFECTED', added:'ADDED', cut:'CUT', restored:'RESTORED' };
+    const sides = zh ? { pro:'赞成', con:'反对', undecided:'未定' } : { pro:'YES', con:'NO', undecided:'UNDECIDED' };
+    const bases = zh ? { topic:'议题原文', context:'背景原文', emperor:'猫皇提供的信息', risk:'猫皇的风险词条', opportunity:'猫皇的机会词条', constraint:'猫皇设定的约束', fact:'猫皇提供的事实', assumption:'推断／假设，未核实', unverified:'含未提供来源的说法，需追问核实', missing:'尚未给出论据，可追问' }
+      : { topic:'PETITION', context:'BACKGROUND', emperor:'YOUR INPUT', risk:'RISK FACTOR', opportunity:'OPPORTUNITY', constraint:'YOUR CONSTRAINT', fact:'YOUR FACT', assumption:'UNVERIFIED INFERENCE', unverified:'UNSUPPORTED SOURCE CLAIM — ASK FOR EVIDENCE', missing:'NO ARGUMENT YET — ASK WHY' };
+    const active = this.state.activeTurn || {}, detail = active.detail || {};
+    const latest = [], seen = new Set(), trails = {}, alliances = new Map();
+    const eventRows = [];
+    for (const turn of feed) {
+      const d = turn.detail || {};
+      if (meta[turn.minister] && turn.minister !== 'parrot' && turn.kind !== 'verdict') {
+        trails[turn.minister] = trails[turn.minister] || [];
+        const path = trails[turn.minister];
+        if (!path.length || path[path.length - 1].stance !== turn.stance) path.push(turn);
+      }
+      if (d.from_stance && d.from_stance !== turn.stance) {
+        for (const [key, pair] of alliances) if (pair.includes(turn.minister)) alliances.delete(key);
+      }
+      if (d.outcome === 'allied' && turn.target) {
+        const pair = [turn.minister, turn.target].sort(); alliances.set(pair.join('|'), pair);
+      }
+      if (!d.outcome && turn.kind !== 'decree' && !(this.state.watch && turn.kind === 'opening')) continue;
+      if (this.state.watch && turn.minister !== this.state.watch && turn.target !== this.state.watch) continue;
+      const drivers = d.drivers || {};
+      const factorNames = (drivers.factors || []).map(id => {
+        const f = (((L || {}).factors) || []).find(f => f.id === id); return f ? f.text : '';
+      }).filter(Boolean);
+      const causes = [drivers.influence ? (zh ? '游说者影响力 ' : 'Influence ') + drivers.influence : '',
+        drivers.pressure ? (zh ? '多次交涉累积压力' : 'Repeated pressure') : '',
+        drivers.alliance_shield ? (zh ? '原同盟提供抵抗' : 'Alliance resistance') : '',
+        drivers.forced ? (zh ? '未定过多，规则要求站队' : 'Deadlock rule') : '',
+        factorNames.length ? (zh ? '词条影响：' : 'Factors: ') + factorNames.join('、') : ''].filter(Boolean);
+      eventRows.push({ key:turn.seq, title:'#' + turn.seq + ' · ' + name(turn.minister)
+        + (turn.target ? ' → ' + name(turn.target) : '') + ' · ' + (moves[d.move] || moves[turn.kind] || turn.kind),
+        result:(outcomes[d.outcome] || '') + (d.from_stance && d.from_stance !== turn.stance
+          ? ' · ' + sides[d.from_stance] + ' → ' + sides[turn.stance] : ''),
+        why: causes.join('；') || d.reason || turn.text,
+        cause:d.reply_to ? (zh ? '回应 #' : 'REPLY TO #') + d.reply_to : (zh ? '查看原记录 #' : 'VIEW #') + turn.seq,
+        ruleText: typeof drivers.score === 'number' ? (d.move === 'ally'
+          ? (zh ? '同阵营依规则建立同盟，立场不变。' : 'A shared stance forms an alliance without changing sides.')
+          : (zh ? '影响力＋累积施压＋词条影响－同盟牵制＋情境波动＝' : 'Influence + pressure + factors − alliance + uncertainty = ')
+            + drivers.score + (zh ? '；大于 1 才转向。' : '; above 1 switches stance.')
+            + (drivers.forced ? (zh ? '本次另有解锁僵局规则要求站队。' : 'A deadlock rule also required a stance.') : '')) : '',
+        ruleLabel:zh ? '查看判定依据' : 'HOW THIS WAS DECIDED',
+        jump:() => { const el=document.getElementById('turn-' + (d.reply_to || turn.seq)); if (el) el.scrollIntoView({behavior:'smooth',block:'center'}); },
+        trackLabel:zh ? '追踪此人' : 'TRACE',
+        track: () => this.setState({ watch: turn.minister }) });
+    }
+    for (const turn of feed.slice().reverse()) {
+      if (!meta[turn.minister] || turn.minister === 'parrot' || seen.has(turn.minister)) continue;
+      seen.add(turn.minister); const d = turn.detail || {};
+      latest.push({ name:name(turn.minister), head:meta[turn.minister].head, text:turn.text,
+        reason:d.reason || (zh ? '尚未给出论证。可向他追问。' : 'Ask this minister for an argument.'),
+        evidence:d.evidence || '', basis:bases[d.basis] || bases.missing,
+        target:turn.target ? '→ ' + name(turn.target) : (zh ? '向全场陈词' : 'TO THE COURT'),
+        active:active.seq === turn.seq ? 'mm-group-active' : '',
+        focus:() => { this.pokeM(turn.minister); this.setState({ showGroup: false }); } });
+      if (latest.length === 4) break;
+    }
+    return {
+      pausedClass: this.state.paused ? 'mm-paused' : '',
+      playbackStatus: this.state.paused
+        ? (this.state.generating || this.state.replying ? (zh ? '已暂停。正在生成的结果只会收进待播，不会推进。' : 'PAUSED. Pending generation will be queued.') : (zh ? '已暂停 · 台词、动画与局势冻结' : 'PAUSED · SPEECH, ANIMATION AND EVENTS FROZEN'))
+        : (this.state.replying ? (zh ? '众卿正在回应猫皇……' : 'THE COURT IS ANSWERING…')
+          : this.state.generating ? (zh ? '正在生成下一轮群辩……' : 'GENERATING THE NEXT EXCHANGE…') : (zh ? '逐句朝议 · 随时可插话' : 'LIVE DEBATE · YOU MAY SPEAK')),
+      activeReason:detail.reason || (zh ? '尚未给出论证，可以直接追问“为什么”。' : 'No argument yet. Ask why.'),
+      activeEvidence:detail.evidence || '', activeBasis:bases[detail.basis] || bases.missing,
+      argumentOn: !!active.minister && active.minister !== 'emperor',
+      activeMove: moves[detail.move] || (active.kind === 'floor' ? (zh ? '群辩' : 'FLOOR') : ''),
+      groupRows:latest, showGroup:!!this.state.showGroup,
+      toggleGroup:() => this.setState({ showGroup:!this.state.showGroup, groupPreference:!this.state.showGroup }),
+      groupTitle:zh ? '群辩现场 · 多方回应' : 'THE FLOOR · MULTIPLE VOICES',
+      groupToggle:zh ? '群辩视图' : 'THE FLOOR', closeGroup:zh ? '回到朝堂' : 'BACK',
+      reasonWord:zh ? '理由' : 'REASON', evidenceWord:zh ? '依据' : 'BASIS',
+      stepLine:() => this.stepLine(), stepLabel:zh ? '下一句' : 'NEXT',
+      stepDisabled: !L || this.state.itvBusy || this.state.generating || this.state.phase !== 'debating',
+      emperorText:this.state.emperorText || '', emperorKind:this.state.emperorKind,
+      emperorTarget:this.state.emperorTarget || '',
+      emperorChange:e => { this.pausePlayback(); this.setState({ emperorText:e.target.value }); },
+      emperorKindChange:e => this.setState({ emperorKind:e.target.value }),
+      emperorTargetChange:e => this.setState({ emperorTarget:e.target.value }),
+      emperorModes:[['question',zh ? '追问' : 'ASK'],['fact',zh ? '补充事实' : 'ADD FACT'],['constraint',zh ? '提出约束' : 'CONSTRAIN'],['custom',zh ? '发言' : 'SPEAK']].map(([value,label]) => ({value,label})),
+      emperorTargets:[{value:'',label:zh ? '向全场' : 'EVERYONE'}].concat(Object.keys(meta).filter(id => id !== 'parrot').map(id => ({value:id,label:name(id)}))),
+      emperorSend:() => this.sendEmperor(), emperorDisabled:!L || L.status === 'decided' || this.state.itvBusy || !(this.state.emperorText || '').trim(),
+      emperorPlaceholder:zh ? '猫皇在此发言：追问理由、补充事实，或给出必须满足的条件……' : 'Ask why, add a fact, or set a condition…',
+      emperorLabel:zh ? '猫皇发言' : 'YOUR VOICE', sendLabel: this.state.itvBusy ? (zh ? '处理中…' : 'WORKING…') : (zh ? '发言并听回应' : 'SPEAK & HEAR REPLIES'),
+      actionNotice:this.state.actionNotice || '',
+      wallTitle:zh ? '局势词条墙' : 'FACTOR WALL',
+      wallHint:zh ? '风险强化谨慎派，机会强化行动派；约束牵动规则派，事实牵动档案派。切掉后不再计入下一轮。' : 'Risks strengthen cautious voices; opportunities strengthen action. Cut factors no longer count next round.',
+      factorKinds:[['risk',zh ? '风险' : 'RISK'],['opportunity',zh ? '机会' : 'OPPORTUNITY'],['constraint',zh ? '约束' : 'CONSTRAINT'],['fact',zh ? '事实' : 'FACT']].map(([value,label]) => ({value,label})),
+      factorKind:this.state.factorKind, factorText:this.state.factorText || '',
+      factorChange:e => { this.pausePlayback(); this.setState({ factorText:e.target.value }); },
+      factorKindChange:e => this.setState({ factorKind:e.target.value }),
+      factorSubmit:() => this.editFactor(), factorDisabled:!L || L.status === 'decided' || this.state.itvBusy || !(this.state.factorText || '').trim(),
+      factorBusy:!L || L.status === 'decided' || !!this.state.itvBusy,
+      factorPlaceholder:zh ? '例如：预算最多 5 万／两周内必须试行' : 'For example: a strict budget or deadline',
+      addFactorLabel:zh ? '加入' : 'ADD',
+      factorRows:((L || {}).factors || []).map(f => ({text:f.text,
+        label:((zh ? {risk:'风险',opportunity:'机会',constraint:'约束',fact:'事实'} : {risk:'RISK',opportunity:'OPPORTUNITY',constraint:'CONSTRAINT',fact:'FACT'})[f.kind]),
+        state:f.active ? (zh ? '生效' : 'ACTIVE') : (zh ? '已切掉' : 'CUT'),
+        action:f.active ? (zh ? '切掉' : 'CUT') : (zh ? '恢复' : 'RESTORE'),
+        className:f.active ? 'mm-factor' : 'mm-factor mm-factor-cut', toggle:() => this.editFactor(f) })),
+      factorsEmpty:!L || !(L.factors || []).length,
+      wallEmpty:zh ? '猫皇可以把局势拆成词条。加入或切掉之后，影响会出现在交涉结果与脉络里。' : 'Add or cut factors to change the discussion and negotiation pressure.',
+      reconsider:() => { this.setState({ emperorText:zh ? '请根据当前生效的局势词条重新检查你们的论据和条件。' : 'Recheck your arguments and conditions against the active factors.', emperorKind:'question', emperorTarget:'' }); return this.sendEmperor(); },
+      reconsiderLabel:zh ? '让众卿回应新局势' : 'ASK THE COURT TO RECONSIDER',
+      openWall:() => { const el=document.getElementById('court-factor-wall'); if (el) el.scrollIntoView({behavior:'smooth',block:'start'}); },
+      timelineTitle:zh ? '局势脉络' : 'HOW THE COURT CHANGED', eventRows:eventRows.slice(-30).reverse(),
+      noEvents:!eventRows.length, noEventsText:zh ? '游说、威胁、结盟和阵营变化会按发生顺序留在这里。' : 'Lobbying, pressure, alliances and switches will appear here.',
+      allianceText:Array.from(alliances.values()).map(p => p.map(name).join(' ↔ ')).join('；') || (zh ? '尚无同盟' : 'NO ALLIANCE YET'),
+      alliancePairs:Array.from(alliances.values()),
+      trailRows:Object.keys(trails).filter(id => !this.state.watch || id === this.state.watch).map(id => ({name:name(id),
+        path:trails[id].map((v,i) => (i ? 'R' + ((v.detail || {}).round || '?') : (zh ? '开场' : 'OPEN')) + ' ' + sides[v.stance]).join(' → '),
+        track:() => this.setState({watch:this.state.watch === id ? '' : id}) })),
+      clearWatch:() => this.setState({watch:''}), clearWatchLabel:this.state.watch ? (zh ? '正在追踪：' : 'TRACKING: ') + name(this.state.watch) + (zh ? ' · 查看全部' : ' · SHOW ALL') : (zh ? '点击名字追踪阵营变换' : 'SELECT A NAME TO TRACE'),
+    };
+  }
+
+  openRoute(seq) {
+    this.pausePlayback();
+    this.setState({ routeSeq: seq }, () => {
+      const dialog = document.getElementById('court-route');
+      if (dialog && !dialog.open) dialog.showModal();
+    });
+  }
+
+  closeRoute() {
+    const dialog = document.getElementById?.('court-route');
+    if (dialog && dialog.open) dialog.close();
+    this.setState({ routeSeq: null });
+  }
+
+  async resumeCourt(sid) {
+    this.closeStream(); const run = this._run;
+    this.setState({ screen:4, phase:'opening', err:'' });
+    try {
+      const s = await this.api('/api/court/' + encodeURIComponent(sid));
+      if (run !== this._run) return;
+      this._queuedSeq = s.turns.length ? s.turns[s.turns.length - 1].seq : 0;
+      this.setState({ sid:s.id, live:s, feed:s.turns, activeTurn:s.turns[s.turns.length - 1] || null,
+        screen:s.status === 'decided' ? 5 : 4, paused:true,
+        phase:s.status === 'decided' ? 'ruled' : (s.rounds_left ? 'debating' : 'recess') });
+    } catch (e) {
+      if (run === this._run) this.setState({ phase:'offline', err:this.state.lang === 'zh' ? '这场朝会暂时无法打开。' : 'This court could not be opened.' });
+    }
+  }
+
+  focusView(experience) {
+    const L = this.state.live, zh = this.state.lang === 'zh', meta = this.minMeta();
+    const feed = this.state.feed || [], active = this.state.activeTurn || {};
+    const name = id => id === 'emperor' ? (zh ? '猫皇' : 'EMPEROR') : (meta[id] ? (zh ? meta[id].zh : meta[id].en) : (zh ? '全场' : 'COURT'));
+    const sides = zh ? {pro:'赞成',con:'反对',undecided:'未定'} : {pro:'YES',con:'NO',undecided:'OPEN'};
+    const colors = {pro:'#82b196',con:'#d48c86',undecided:'#a49caa'};
+    const shown = {};
+    feed.forEach(t => { if (meta[t.minister] && t.minister !== 'parrot' && t.kind !== 'verdict') shown[t.minister] = t; });
+    const ids = ((L || {}).ministers || []).map(m => m.id).filter(id => id !== 'parrot' && meta[id]).sort();
+    const positions = {}, counts = {pro:0,con:0,undecided:0};
+    const nodes = ids.map(id => {
+      const stance = shown[id] ? shown[id].stance : 'undecided', i = counts[stance]++;
+      const x = stance === 'pro' ? 60 + Math.floor(i / 3) * 65 : stance === 'con' ? 340 - Math.floor(i / 3) * 65 : 182 + Math.floor(i / 3) * 38;
+      const y = 135 + (i % 3) * 68; positions[id] = {x,y};
+      return { id, head:meta[id].head, bg:meta[id].bg, name:name(id), motion:id === active.minister ? 'idleBob 1.6s ease-in-out infinite' : 'none', speaking:id === active.minister, text:active.text && (active.text.length > 42 ? active.text.slice(0,42) + '…' : active.text), bubbleSide:x > 260 ? 'from-right' : x > 150 ? 'from-center' : '', color:colors[stance], left:x / 4 + '%', top:y / 3.1 + '%',
+        label:name(id) + ' · ' + sides[stance], current:id === active.minister ? 'is-speaking' : '',
+        inspect:() => { this.pausePlayback(); this.setState({graphWatch:id}); if (shown[id]) this.openRoute(shown[id].seq); } };
+    });
+    positions.emperor = {x:200,y:45};
+    nodes.push({ id:'emperor',head:'😾',bg:'#e3d9c4',name:name('emperor'),motion:active.minister === 'emperor' ? 'idleBob 2.6s ease-in-out infinite' : 'none',speaking:active.minister === 'emperor',text:active.text,bubbleSide:'from-throne',color:'#d9bb79',left:'50%',top:45 / 3.1 + '%',label:name('emperor'),current:active.minister === 'emperor' ? 'is-speaking' : '',
+      inspect:() => { const t=feed.filter(t => t.minister === 'emperor').pop(); if (t) this.openRoute(t.seq); } });
+    // Only an actual played offer moves its speaker toward the recipient.
+    // On reply, camp positions come from the played stance, including defection.
+    if (active.kind === 'lobby' && (active.detail || {}).outcome === 'offer' && positions[active.target] && positions[active.minister]) {
+      const a=positions[active.minister], b=positions[active.target];
+      const approached={x:b.x + (a.x < b.x ? -42 : 42),y:b.y};
+      positions[active.minister]=approached;
+      Object.assign(nodes.find(n => n.id === active.minister), {left:approached.x/4+'%',top:approached.y/3.1+'%'});
+    }
+    const edges = [];
+    const edge = (a,b,kind,turn,label,current=false) => {
+      if (!positions[a] || !positions[b] || a === b) return;
+      const start=positions[a], end=positions[b];
+      const offset=Math.abs(start.x-end.x) < 45 ? (start.x < 150 ? -58 : start.x > 260 ? 58 : 45) : 0;
+      const path=offset ? `M ${start.x} ${start.y} C ${start.x+offset} ${start.y} ${end.x+offset} ${end.y} ${end.x} ${end.y}` : `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+      edges.push({path,x1:start.x,y1:start.y,x2:end.x,y2:end.y,
+        color:kind === 'ally' ? '#82b196' : (['threaten','defect','broken'].includes(kind) ? '#e19289' : (kind === 'speech' ? '#817887' : '#d9bb79')),
+        width:kind === 'speech' ? 1.4 : 2.8, dash:kind === 'ally' ? '0' : (kind === 'broken' ? '2 7' : '6 5'),
+        opacity:kind === 'speech' && !current ? .35 : .85, className:current ? 'mm-edge-active' : '',
+        label:name(a) + ' → ' + name(b) + ' · ' + label, inspect:() => { if (turn) this.openRoute(turn.seq); } });
+    };
+    for (const pair of experience.alliancePairs || []) {
+      const t=feed.filter(t => (t.detail || {}).outcome === 'allied' && pair.includes(t.minister) && pair.includes(t.target)).pop();
+      edge(pair[0],pair[1],'ally',t,zh ? '同盟' : 'ALLIANCE');
+    }
+    const offers = feed.filter(t => (t.detail || {}).outcome === 'offer').slice(-4);
+    for (const t of offers) {
+      const result=feed.find(r => (r.detail || {}).reply_to === t.seq && r.kind === 'lobby');
+      const d=t.detail || {};
+      if (d.move !== 'ally') edge(t.minister,t.target,d.move,t, d.move === 'threaten' ? (zh ? '施压' : 'PRESSURE') : (zh ? '拉拢' : 'LOBBY'), active.seq === t.seq || (active.detail || {}).reply_to === t.seq);
+      if (result && (result.detail || {}).outcome === 'defected') {
+        for (const pair of result.detail.former_allies || []) edge(pair[0],pair[1],'broken',result,zh ? '已背盟' : 'BROKEN');
+      }
+    }
+    for (const t of feed.filter(t => ['rebuttal','floor','reply'].includes(t.kind) && t.target).slice(-3)) {
+      edge(t.minister,t.target,'speech',t,zh ? '回应' : 'REPLY',t.seq === active.seq);
+    }
+    const chat = feed.filter(t => t.kind !== 'factor' && t.kind !== 'note').slice(-30).map(t => {
+      const d=t.detail || {};
+      return {seq:t.seq, name:name(t.minister), head:t.minister === 'emperor' ? '😾' : ((meta[t.minister] || {}).head || '·'),
+        routeLabel:(zh ? '展开路由：' : 'Open route: ') + name(t.minister),
+        text:t.text.length > 42 ? t.text.slice(0,42) + '…' : t.text,
+        target:t.target && (meta[t.target] || t.target === 'emperor') ? '→ ' + name(t.target) : '',
+        current:t.seq === active.seq ? 'is-current' : '',
+        open:() => this.openRoute(t.seq), action:d.outcome && d.outcome !== 'offer' ? (zh ? {allied:'结盟',resisted:'抵抗',flipped:'转向',defected:'背盟'} : {allied:'ALLIED',resisted:'HELD',flipped:'SWITCH',defected:'DEFECT'})[d.outcome] || '' : ''};
+    }).reverse();
+    const route = feed.find(t => t.seq === this.state.routeSeq), rd = (route || {}).detail || {};
+    const parent=feed.find(t => t.seq === rd.reply_to), result=route && feed.find(t => (t.detail || {}).reply_to === route.seq && (t.detail || {}).outcome);
+    const event=route && experience.eventRows.find(e => e.key === route.seq);
+    const steps=[];
+    const factorIds=(rd.drivers || {}).factors || [];
+    const factorNames=factorIds.map(id => (((L || {}).factors || []).find(f => f.id === id) || {}).text).filter(Boolean);
+    if (factorNames.length) factorNames.forEach(text => steps.push({text}));
+    else if (rd.evidence || (parent && (parent.detail || {}).evidence)) steps.push({text:zh ? '输入材料' : 'INPUT'});
+    if (parent) steps.push({text:name(parent.minister)});
+    if (route) steps.push({text:name(route.minister)});
+    if (route && route.target && (!parent || parent.minister !== route.target) && (meta[route.target] || route.target === 'emperor')) steps.push({text:name(route.target)});
+    const terminal=result ? (result.detail || {}).outcome : rd.outcome;
+    if (terminal && terminal !== 'offer') steps.push({text:(zh ? {allied:'结盟',resisted:'抵抗',flipped:'转向',defected:'背盟'} : {allied:'ALLIED',resisted:'HELD',flipped:'SWITCH',defected:'DEFECT'})[terminal] || terminal});
+    const factorRows=experience.factorRows.map((f,i) => ({...f,active:((L || {}).factors || [])[i].active,
+      toggleLabel:f.action + ' ' + f.text}));
+    const focusOn=!!L && this.state.screen === 4;
+    return {
+      compactCourtOn:focusOn, focusStageClass:focusOn ? 'mm-focus-stage' : '',
+      legacyNavOn:!focusOn, railOn:!!L && this.state.screen !== 4, closeLabel:zh ? '关闭' : 'CLOSE',
+      newTopicLabel:zh ? '更换议题' : 'CHANGE PETITION',
+      fallbackLabel:zh ? '兜底' : 'FALLBACK',
+      focusTopic:(L || {}).topic || '', focusStatus:this.state.paused ? (zh ? '已暂停' : 'PAUSED') : (this.state.replying || this.state.generating ? (zh ? '酝酿中' : 'THINKING') : (zh ? '朝议中' : 'LIVE')),
+      activeFactors:factorRows.filter(f => f.active), cutFactors:factorRows.filter(f => !f.active),
+      cutCount:factorRows.filter(f => !f.active).length, cutLabel:zh ? '已切掉' : 'CUT',
+      emptyWallLabel:zh ? '加一个风险、机会或条件。' : 'Add a risk, opportunity or condition.',
+      compactFactorPlaceholder:zh ? '加一个局势词条…' : 'Add a factor…',
+      compactEmperorPlaceholder:zh ? '想问什么，或加一个条件…' : 'Ask a question or add a condition…',
+      modeSelectLabel:zh ? '发言方式' : 'MESSAGE TYPE', targetSelectLabel:zh ? '发言对象' : 'RECIPIENT',
+      compactSendLabel:this.state.itvBusy ? (zh ? '等回应…' : 'WAITING…') : (zh ? '发送' : 'SEND'),
+      emperorKey:e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this.sendEmperor(); } },
+      graphNodes:nodes, graphEdges:edges, graphTitle:zh ? '朝堂 · 动态局势' : 'THE LIVING COURT',
+      graphPro:sides.pro + ' ' + counts.pro, graphCon:sides.con + ' ' + counts.con, graphOpen:sides.undecided + ' ' + counts.undecided,
+      graphAllyLabel:zh ? '同盟' : 'ALLIANCE', graphLobbyLabel:zh ? '拉拢' : 'LOBBY', graphPressureLabel:zh ? '施压／背盟' : 'PRESSURE',
+      graphFocus:this.state.graphWatch ? name(this.state.graphWatch) + (shown[this.state.graphWatch] ? ' · ' + sides[shown[this.state.graphWatch].stance] : (zh ? ' · 尚未发言' : ' · NOT SPOKEN')) : '',
+      chatRows:chat, chatTitle:zh ? '群聊' : 'CHAT', chatEmpty:!chat.length,
+      chatEmptyLabel:zh ? '等众卿开口…' : 'Waiting for the court…', routeHint:zh ? '展开路由' : 'OPEN ROUTE',
+      routeOn:!!route, routeTitle:zh ? '发言路由' : 'SPEECH ROUTE', routeSteps:steps,
+      routeSpeaker:route ? name(route.minister) : '', routeText:route ? route.text : '',
+      routeBasis:rd.basis === 'unverified' ? (zh ? '含未提供来源的说法' : 'UNSUPPORTED SOURCE CLAIM') : (rd.basis === 'assumption' ? (zh ? '推断／假设' : 'INFERENCE') : ''),
+      routeReason:rd.reason || (zh ? '未提供论证，可继续追问。' : 'No argument provided; ask a follow-up.'),
+      routeEvidence:rd.evidence || (parent && (parent.detail || {}).evidence) || '', routeCauses:event ? event.why : '', routeParent:parent ? name(parent.minister) + '：' + parent.text : '',
+      routeResult:event ? event.result : '', routeRule:event ? event.ruleText : '',
+      routeReasonLabel:zh ? '理由' : 'ARGUMENT', routeEvidenceLabel:zh ? '引用材料' : 'SOURCE',
+      routeParentLabel:zh ? '回应了什么' : 'RESPONDING TO', routeRuleLabel:zh ? '局势判定' : 'OUTCOME',
+      closeRoute:() => this.closeRoute(), routeCancel:e => { e.preventDefault(); this.closeRoute(); },
+    };
+  }
+
+  async pickItv(type, text) {
+    if (!this.state.sid || this.state.itvBusy || !['debating', 'recess'].includes(this.state.phase)) return;
+    const run = this._run;
+    this.pausePlayback(); this.setState({ itvBusy: true, err: '' });
+    try {
+      if (this._roundTask) await this._roundTask;
+      if (run !== this._run) return;
+      const live = await this.api('/api/court/' + this.state.sid + '/decree', { kind: type, text: text || '' });
+      if (run !== this._run) return;
+      this.acceptSnapshot(live);
+    } catch (e) {
+      if (run === this._run) this.setState({ itvBusy: false, err: String(e.message || e) });
+      return;
+    }
+    this.setState({ itvBusy: false, itvCustom: '' });
     clearTimeout(this._itvT);
     const upd = { itvOpen: false, itv: type, cut: null };
-    if (type === 'swap') upd.pairIdx = (this.state.pairIdx + 1) % 4;
     this.setState(upd);
     this._itvT = setTimeout(() => this.setState({ itv: null }), 3200);
-    // 圣旨要进朝堂记录：下一轮的 prompt 会带上它，大臣得知道皇帝插过话
-    if (this.state.sid) {
-      this.api('/api/court/' + this.state.sid + '/decree',
-               { kind: type, text: text || '' }).catch(() => {});
-    }
   }
 
   pair() {
@@ -993,10 +1730,11 @@ class Component extends DCLogic {
     };
   }
 
-  showSolo() {
+  showSolo(speaker) {
     const ids = ['rabbit','fox','horse','raccoon','banana','snake','collie','moth','fish','sheep','octopus'];
     this._soloIdx = ((this._soloIdx || 0) + 1) % ids.length;
-    const id = ids[this._soloIdx];
+    const id = speaker || (this.state.activeTurn && this.state.activeTurn.minister);
+    if (!ids.includes(id)) return;
     this._vc = this._vc || {};
     this._vc[id] = ((this._vc[id] === undefined ? -1 : this._vc[id]) + 1) % this.vig()[id].length;
     clearTimeout(this._cutT);
@@ -1154,14 +1892,16 @@ class Component extends DCLogic {
 
   pokeM(id) {
     clearTimeout(this._pk);
-    this.setState({ poke: id });
+    this.pausePlayback();
+    this.setState({ poke: id, paused: true });
+    this.showSolo(id);
     this._pk = setTimeout(() => this.setState({ poke: null }), 2200);
   }
 
   renderVals() {
     const s = this.state.screen;
     const zh = this.state.lang === 'zh';
-    const go = (n) => () => this.setState({ screen: n });
+    const go = (n) => () => this.navigate(n);
     const D = zh ? "'ZCOOL KuaiLe','Baloo 2',sans-serif" : "'Lilita One','Baloo 2',sans-serif";
     const A = zh ? "'ZCOOL KuaiLe',sans-serif" : "'Lilita One',sans-serif";
 
@@ -1188,7 +1928,7 @@ class Component extends DCLogic {
       speakerChip:'跺脚将军 · 主战', speakerSide:'第一武将',
       clashLeft:'跺脚将军', clashRight:'维斯帕', clashWord:'交锋！', clashSub:'第三幕', objWord:'异议！',
       proLabel:'赞成', conLabel:'反对', swingLabel:'摇摆',
-      sbLabel:'本集分镜 — 点击插手', actNo:'第 3/5 幕',
+      sbLabel:'朝会议程 — 发言驱动', actNo:'第 3/5 幕',
       intervene:'插手这一幕', ruleNow:'圣裁',
       topicPh:'今天要裁决的是……', ctxPh:'补充背景（可留空，写了大臣更贴题）',
       ruleApprove:'准奏', ruleReject:'驳回', ruleShelve:'搁置', ruleAdjourn:'退朝',
@@ -1205,7 +1945,8 @@ class Component extends DCLogic {
       throneTag:'YOU · 猫皇', tapHint:'点一点大臣，听他嘀咕',
       lobbyBanner:'游说进行中…', whisperA:'「跟我走，有小鱼干…」', whisperB:'「回来！赢了请你喝鱼汤」', lobThought:'「有道理…！」',
       itvTitle:'圣意如何？', itvSub:'INTERVENE', itvCancel:'再看看 ↓', silenceCry:'肃静！！',
-      itvOpt1:'拍案肃静', itvOpt1Sub:'拍案震殿，满堂闭嘴', itvOpt2:'朱笔换将', itvOpt2Sub:'朱笔一挥，换新对手上台', itvOpt3:'宣香蕉发言', itvOpt3Sub:'香蕉雨伺候，让最离谱的上台',
+      itvOrLabel:'或亲自下旨', itvCustomPh:'补充要求，下一轮会参考（最多 200 字）', itvCustomBtn:'下旨',
+      itvOpt1:'拍案肃静', itvOpt1Sub:'暂停逐句播放，按继续恢复朝议', itvOpt2:'朱笔换将', itvOpt2Sub:'下一轮更换对手；下旨后点击继续', itvOpt3:'宣香蕉发言', itvOpt3Sub:'下一轮指定香蕉发言；下旨后点击继续',
       itvToastSilence:'奉旨：满殿肃静！', itvToastSwap:'奉旨：朱笔一挥，换将再战！', itvToastBanana:'奉旨：宣香蕉大臣发言！',
       itvOpt4:'罢免应声', itvOpt4Sub:'赶走谀臣。再没有人顺着你说话，判词也得自己扛',
       itvToastDismiss:'奉旨：应声退朝，不必再来。',
@@ -1245,7 +1986,7 @@ class Component extends DCLogic {
       speakerChip:'GEN. THUMP · PRO', speakerSide:'FIRST GENERAL',
       clashLeft:'GEN. THUMP', clashRight:'VESPER', clashWord:'CLASH!', clashSub:'ACT 3', objWord:'OBJECTION!',
       proLabel:'PRO', conLabel:'CON', swingLabel:'SWING',
-      sbLabel:'STORYBOARD — TAP TO STEP IN', actNo:'ACT 3/5',
+      sbLabel:'COURT PROGRESS', actNo:'ACT 3/5',
       intervene:'INTERVENE', ruleNow:'RULE NOW',
       topicPh:'TODAY I MUST DECIDE…', ctxPh:'Context (optional — sharpens the ministers)',
       ruleApprove:'APPROVE', ruleReject:'REJECT', ruleShelve:'SHELVE', ruleAdjourn:'ADJOURN',
@@ -1262,7 +2003,8 @@ class Component extends DCLogic {
       throneTag:'YOU · EMPEROR', tapHint:'TAP A MINISTER',
       lobbyBanner:'LOBBYING…', whisperA:'"COME — I HAVE SARDINES…"', whisperB:'"COME BACK — FISH SOUP ON ME!"', lobThought:'"FAIR POINT…!"',
       itvTitle:'YOUR WILL, SIRE?', itvSub:'插手', itvCancel:'JUST WATCHING ↓', silenceCry:'SILENCE!!',
-      itvOpt1:'SLAM — SILENCE!', itvOpt1Sub:'The bench rattles. Everyone shuts up.', itvOpt2:'VERMILION SWAP', itvOpt2Sub:'One brushstroke — fresh duelists', itvOpt3:'CALL ON BANANA', itvOpt3Sub:'Banana rain. Chaos has the floor.',
+      itvOrLabel:'OR ISSUE YOUR OWN DECREE', itvCustomPh:'A request for the next round (up to 200 characters)', itvCustomBtn:'ISSUE',
+      itvOpt1:'SLAM — SILENCE!', itvOpt1Sub:'Pause the debate. Press RESUME to continue.', itvOpt2:'VERMILION SWAP', itvOpt2Sub:'Change next round’s pair, then press RESUME', itvOpt3:'CALL ON BANANA', itvOpt3Sub:'Banana speaks next round; then press RESUME',
       itvToastSilence:'BY DECREE: SILENCE!', itvToastSwap:'BY DECREE: NEW DUELISTS TAKE THE FLOOR!', itvToastBanana:'BY DECREE: BANANA HAS THE FLOOR!',
       itvOpt4:'DISMISS THE ECHO', itvOpt4Sub:'Banish the yes-man. Nobody flatters you again — the decree is yours alone.',
       itvToastDismiss:'BY DECREE: THE ECHO IS BANISHED.',
@@ -1280,6 +2022,16 @@ class Component extends DCLogic {
       mirrorFavorite:'WHOSE LINES YOU KEEP', noteBtn:'KEEP THIS', noteDone:'✓ KEPT',
     };
     const t = zh ? T_ZH : T_EN;
+    Object.assign(t.logKind, zh ? {floor:'群辩',reply:'回应猫皇',factor:'词条',question:'追问',fact:'补充事实',constraint:'提出约束',custom:'发言'} : {floor:'FLOOR',reply:'ANSWER',factor:'FACTOR',question:'QUESTION',fact:'FACT',constraint:'CONSTRAINT',custom:'SPEAK'});
+    if (this.state.live) {
+      const decided = this.state.live.status === 'decided';
+      t.verTitle1 = decided ? (zh ? '聖裁' : 'DECREE ') : (zh ? '请下' : 'YOUR ');
+      t.verTitle2 = decided ? (zh ? '已下' : 'IS OUT') : (zh ? '聖裁' : 'VERDICT');
+      t.verChip = decided ? (zh ? '本场朝会 · 已裁决' : 'COURT · DECIDED') : (zh ? '本场朝会 · 待裁决' : 'COURT · AWAITING VERDICT');
+      const kind = (this.state.activeTurn || {}).kind;
+      t.heatWord = this.state.phase === 'recess' ? (zh ? '辩毕' : 'RECESS')
+        : (kind === 'rebuttal' ? (zh ? '交锋' : 'CLASH') : (kind === 'lobby' ? (zh ? '游说' : 'LOBBY') : (zh ? '陈词' : 'SPEAKING')));
+    }
 
     const dotPal = (s === 4)
       ? { on:'#b2a181', onFg:'#2b2733', off:'rgba(241,237,228,.5)', offFg:'rgba(241,237,228,.8)', offBg:'#2b2733' }
@@ -1337,38 +2089,62 @@ class Component extends DCLogic {
       { icon:'🎓', text:'A PHD AT 30 — BRAVE OR FLEEING?', tag:'DESTINY' },
     ];
 
-    const actLabels = zh ? ['开题','首轮','白热化','游说','终幕'] : ['OPEN','CLASH','IGNITE','LOBBY','FINALE'];
+    const actLabels = zh ? ['一轮','二轮','三轮','四轮','五轮'] : ['ROUND 1','ROUND 2','ROUND 3','ROUND 4','ROUND 5'];
     const L = this.state.live;
-    const act = this.state.phase === 'opening' ? 1 : Math.min(5, (L ? L.round : 2) + 1);
+    const currentTurn = this.state.activeTurn || {};
+    const currentRound = (currentTurn.detail || {}).round ?? (currentTurn.kind === 'opening' ? 0 : ((L || {}).round || 0));
+    const act = Math.max(1, Math.min(5, currentRound));
     const canRule = !L || this.state.phase === 'recess' || L.status === 'decided';
     const cS = this.state.cut;
     const soloV = (cS && cS.mode === 'solo') ? this.vig()[cS.id][cS.v || 0] : null;
 
-    // 实录的底稿 = 后端快照 live.turns，再把还没进快照的那几条 SSE 新发言（feed）按 seq 补在后面。
-    // 快照是每轮才推一次的，不补的话新台词要等一整轮才上墙。只读，不动数据层。
-    const baseTurns = (L && L.turns) || [];
-    const lastSeq = baseTurns.length ? baseTurns[baseTurns.length - 1].seq : 0;
-    const logTurns = baseTurns.concat((this.state.feed || []).filter(x => x && x.seq > lastSeq));
+    // 实录跟随逐句播放，不提前展示尚未读到的台词。
+    const logTurns = this.state.feed || [];
+    const experience = this.experienceView();
 
     return {
-      scr1: s === 1, scr2: s === 2, scr3: s === 3, scr4: s === 4, scr5: s === 5,
+      scr1: s === 1, scr2: s === 2, scr3: s === 3, scr4Live: s === 4 && !!L, scr5: s === 5 && !!L,
+      noCourt: !L && s >= 4,
+      noticeOn: !!this.state.err || (!L && s >= 4),
+      noticeText: this.state.err || (this.state.phase === 'opening'
+        ? (zh ? '众卿正在阅读奏章，请稍候……' : 'The ministers are reading your petition…')
+        : (zh ? '请先呈递奏章，开堂后才会出现真实发言。' : 'Submit a petition to hear the ministers.')),
+      petitionLabel: zh ? '返回奏章' : 'BACK TO PETITION',
+      exportLabel: zh ? '下载本场记录' : 'SAVE COURT RECORD',
+      exportDisabled: !L || L.status !== 'decided',
+      ruleDisabled: !canRule,
+      itvBusy: !!this.state.itvBusy,
+      accessRequired:!!this.state.accessRequired,accessBusy:!!this.state.accessBusy,
+      accessPassword:this.state.accessPassword || '',accessError:this.state.accessError || '',
+      accessTitle:zh ? '朝堂访问口令' : 'Court access password',
+      accessHint:zh ? '这是私人朝堂。请输入主人设置的访问口令。' : 'Enter the owner’s password to open this private court.',
+      accessButton:this.state.accessBusy ? (zh ? '正在开门…' : 'Unlocking…') : (zh ? '进入朝堂' : 'Enter court'),
+      accessChange:e => this.setState({accessPassword:e.target.value}),
+      accessSubmit:e => {e.preventDefault();this.unlockCourt();},
+      customDisabled: !!this.state.itvBusy || !(this.state.itvCustom || '').trim(),
+      exportVerdict: () => this.exportVerdict(),
+      togglePlayback: () => this.togglePlayback(),
+      playbackDisabled: !this.state.sid || !['debating','offline'].includes(this.state.phase),
+      interventionDisabled: this.state.phase !== 'debating',
+      playbackLabel: this.state.phase === 'recess' ? (zh ? '辩毕' : 'FINISHED') : this.state.phase === 'offline' ? (zh ? '重试' : 'RETRY')
+        : (this.state.paused ? (zh ? '继续' : 'RESUME') : (zh ? '暂停' : 'PAUSE')),
       go1: go(1), go2: go(2), go3: go(3), go4: go(4), go5: go(5),
-      noopBtn: () => {},
       t, dispFont: D, altFont: A,
       itvOpen: this.state.itvOpen,
-      openItv: () => this.setState({ itvOpen: true }),
+      openItv: () => { this.pausePlayback(); this.setState({ itvOpen: true }); },
       closeItv: () => this.setState({ itvOpen: false }),
       stopIt: (e) => e.stopPropagation(),
       silenceOn: this.state.itv === 'silence',
       itvToastOn: !!this.state.itv,
-      itvToast: { silence: t.itvToastSilence, swap: t.itvToastSwap, banana: t.itvToastBanana,
+      itvToast: this.state.itv === 'custom' ? (zh ? '圣旨已记录，下一轮会参考。点击继续朝议。' : 'Decree recorded for the next round. Press RESUME.') : { silence: t.itvToastSilence, swap: t.itvToastSwap, banana: t.itvToastBanana,
                   dismiss: t.itvToastDismiss }[this.state.itv] || '',
       itvOptions: [
         { icon:'💥', label:t.itvOpt1, sub:t.itvOpt1Sub, type:'silence' },
         { icon:'🖌', label:t.itvOpt2, sub:t.itvOpt2Sub, type:'swap' },
         { icon:'🍌', label:t.itvOpt3, sub:t.itvOpt3Sub, type:'banana' },
         { icon:'🦜', label:t.itvOpt4, sub:t.itvOpt4Sub, type:'dismiss' },
-      ].filter(o => o.type !== 'dismiss' || !(this.state.live || {}).echo_out)
+      ].filter(o => (o.type !== 'dismiss' || !(this.state.live || {}).echo_out)
+                   && (!['swap', 'banana'].includes(o.type) || this.state.phase === 'debating'))
        .map(o => Object.assign({}, o, { pick: () => this.pickItv(o.type) })),
       stageAnim: this.state.itv === 'silence' ? 'stageShake .6s ease-in-out' : 'none',
       itvBanana: this.state.itv === 'banana',
@@ -1522,7 +2298,7 @@ class Component extends DCLogic {
       acts: actLabels.map((label, i) => {
         const n = i + 1, cur = n === act, past = n < act;
         return {
-          no: String(n).padStart(2, '0'), label, go: () => {},
+      no: String(n).padStart(2, '0'), label,
           bg: cur ? '#b2a181' : 'transparent',
           bd: cur ? '#2b2733' : (past ? 'rgba(241,237,228,.4)' : 'rgba(241,237,228,.22)'),
           fg: cur ? '#2b2733' : (past ? 'rgba(241,237,228,.65)' : 'rgba(241,237,228,.4)'),
@@ -1545,14 +2321,13 @@ class Component extends DCLogic {
       // ---- 辩论屏原来漏接的几个槽位 ----
       heatWord: t.heatWord, heatSize: t.heatSize,
       actTicker: '★ ' + actLabels.join(' ★ ') + ' ★ ',
-      actNo: zh ? `第 ${act}/5 幕` : `ACT ${act}/5`,
+      actNo: currentRound ? (zh ? `第 ${currentRound}/5 轮` : `ROUND ${currentRound}/5`) : (zh ? '开场陈词' : 'OPENING STATEMENTS'),
       ruleAnim: canRule ? 'wiggle 1.6s ease-in-out infinite' : 'none',
       itvCustom: this.state.itvCustom || '',
       itvCustomChange: (e) => this.setState({ itvCustom: e.target.value }),
       itvCustomGo: () => {
         const txt = (this.state.itvCustom || '').trim();
-        if (txt) this.pickItv('swap', txt);
-        this.setState({ itvCustom: '' });
+        if (txt) this.pickItv('custom', txt);
       },
 
       // ---- 判决屏（离线时是演示值，liveView() 会盖掉）----
@@ -1594,9 +2369,10 @@ class Component extends DCLogic {
       ticketByline: t.ticketByline,
       ticketHead: '🐰',
 
-      // ---- 电脑端多出来的那一栏：朝堂实录 ----
-      // live 为 null（纯设计稿 / 后端没起）时 transcript 是空数组，面板只显示一句占位。
-      wideOn: this.state.wide,
+      // 已播放的真实发言，宽屏和窄屏共用。
+      railOn: !!L,
+      fallbackOn: !!(L && L.fallback),
+      fallbackText: zh ? '本场包含模型失败后的兜底台词；请检查模型连接。' : 'This court includes fallback lines after a model failure. Check the model connection.',
       logEmpty: !logTurns.length,
       logCount: logTurns.length + t.logUnit,
       transcript: (() => {
@@ -1606,7 +2382,8 @@ class Component extends DCLogic {
         return logTurns.slice().reverse().map(q => {
           const emp = q.minister === 'emperor';
           const M = mm[q.minister];
-          const bits = [t.logKind[q.kind] || q.kind];
+          const kind = q.minister === 'emperor' ? ((q.detail || {}).move || q.kind) : q.kind;
+          const bits = [t.logKind[kind] || q.kind];
           // 皇帝没有立场，后端给的 undecided 不该显示成「中立」
           if (!emp && t.logStance[q.stance]) bits.push(t.logStance[q.stance]);
           if (q.target && mm[q.target]) bits.push('→ ' + (zh ? mm[q.target].zh : mm[q.target].en));
@@ -1614,7 +2391,9 @@ class Component extends DCLogic {
             head: emp ? '😾' : (M ? M.head : '❔'),
             name: emp ? t.logEmperor : (M ? (zh ? M.zh : M.en) : q.minister),
             meta: bits.join(' · '),
-            text: q.text,
+            text: q.text, anchor:'turn-' + q.seq,
+            reason:(q.detail || {}).reason || '', evidence:(q.detail || {}).evidence || '',
+            basis:zh ? '猫皇提供的输入原文，非独立核验' : 'INPUT QUOTATION, NOT INDEPENDENTLY VERIFIED',
             stance: emp ? '#f1ede4' : (stColor[q.stance] || '#847d88'),
             rowBg: emp ? 'rgba(164,114,106,.32)' : 'rgba(241,237,228,.05)',
             nameCol: emp ? '#f1ede4' : '#b2a181',
@@ -1628,6 +2407,8 @@ class Component extends DCLogic {
 
       // 有真数据就用真数据覆盖上面这些演示值
       ...this.liveView(t),
+      ...experience,
+      ...this.focusView(experience),
     };
   }
 }

@@ -1,0 +1,23 @@
+# Free preview: SQLite is erased when Render sleeps, restarts or redeploys.
+services:
+  - type: web
+    name: the-ministers
+    runtime: python
+    plan: free
+    autoDeployTrigger: off
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.back.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: MINISTERS_DB
+        value: /tmp/ministers/ministers.db
+      - key: MINISTERS_TIMEOUT
+        value: "180"
+      - key: MINISTERS_BASE_URL
+        value: https://generativelanguage.googleapis.com/v1beta/openai
+      - key: MINISTERS_API_KEY
+        sync: false
+      - key: MINISTERS_MODEL
+        value: gemini-3.5-flash-lite
+      - key: MINISTERS_ACCESS_KEY
+        generateValue: true

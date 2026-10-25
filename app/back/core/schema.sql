@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS court_session (
   lean_open   REAL NOT NULL DEFAULT 0,            -- 递奏章时就有的倾向，辩论开始前采集，之后不变
   verdict_aligned INTEGER,                        -- 裁决与 lean_open 同向？1/0；NULL = 没裁决，或开场没倾向
   echo_out    INTEGER NOT NULL DEFAULT 0,        -- 应声被罢免了？罢了就没人再顺着皇帝，判词也换人念
+  factors     TEXT NOT NULL DEFAULT '[]',         -- 猫皇可加入、切掉和恢复的局势词条
   created_at  TEXT NOT NULL,
   ended_at    TEXT
 );
@@ -27,6 +28,7 @@ CREATE TABLE IF NOT EXISTS turn (
   influence   REAL NOT NULL DEFAULT 0,
   text        TEXT NOT NULL,
   target      TEXT,                               -- 游说对象
+  detail      TEXT NOT NULL DEFAULT '{}',          -- 论据、行动结果和立场变化的可追踪记录
   created_at  TEXT NOT NULL
 );
 

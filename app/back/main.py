@@ -7,16 +7,18 @@
 /api/...     → REST
 """
 import json
+import hmac
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .core import store
+from .core import store, access
 from .evaluation import scorers
 from .services import court
 
@@ -28,17 +30,54 @@ CONSOLE = ROOT / "index.html"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if os.environ.get("RENDER"):
+        if len(access.key()) < 16:
+            raise RuntimeError("Set MINISTERS_ACCESS_KEY to at least 16 characters before publishing.")
+        from .core import llm
+        from urllib.parse import urlparse
+        model_host = urlparse(llm.BASE_URL)
+        if not llm.API_KEY or model_host.scheme != "https" or model_host.hostname in {"localhost", "127.0.0.1", "::1"}:
+            raise RuntimeError("Set a cloud model HTTPS URL and API key in Render environment settings.")
     store.init_db()
     yield
 
 
 app = FastAPI(title="The Ministers", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"] if not os.environ.get("RENDER") else [], allow_methods=["*"], allow_headers=["*"])
+
+
+@app.middleware("http")
+async def protect_court(request: Request, call_next):
+    if (request.url.path.startswith("/api/") and request.method != "OPTIONS"
+            and request.url.path not in {"/api/health", "/api/access"}
+            and not access.allowed(request)):
+        return JSONResponse({"detail": "请输入朝堂访问口令"}, status_code=401)
+    response = await call_next(request)
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+class AccessReq(BaseModel):
+    password: str = Field(min_length=1, max_length=256)
+
+
+@app.post("/api/access")
+def unlock_court(req: AccessReq, request: Request):
+    if access.login_limited(request):
+        raise HTTPException(429, "尝试过多，请五分钟后重试")
+    if not access.key() or not hmac.compare_digest(req.password.encode(), access.key().encode()):
+        raise HTTPException(401, "口令不正确")
+    response = JSONResponse({"ok": True})
+    response.set_cookie(access.COOKIE, access.issue(), max_age=access.MAX_AGE,
+                        httponly=True, secure=bool(os.environ.get("RENDER")) or request.url.scheme == "https",
+                        samesite="strict", path="/")
+    return response
 
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "db": store.DB_PATH}
+    return {"ok": True}
 
 
 @app.get("/api/stats")
@@ -83,6 +122,14 @@ class DecreeReq(BaseModel):
     kind: str
     lean_delta: float = Field(default=0.0, ge=-1.0, le=1.0)
     text: str = Field(default="", max_length=200)
+    target: str | None = None
+
+
+class FactorReq(BaseModel):
+    text: str = Field(default="", max_length=160)
+    kind: str = "risk"
+    factor_id: str = ""
+    active: bool = True
 
 
 class VerdictReq(BaseModel):
@@ -108,6 +155,8 @@ def _court(fn, *a):
         return fn(*a)
     except KeyError:
         raise HTTPException(404, "no such session")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
 
 
 @app.post("/api/court")
@@ -168,7 +217,17 @@ def court_stream(session_id: str, after: int = 0):
 
 @app.post("/api/court/{session_id}/decree")
 def court_decree(session_id: str, req: DecreeReq):
-    return _court(court.decree, session_id, req.kind, req.lean_delta, req.text)
+    return _court(court.decree, session_id, req.kind, req.lean_delta, req.text, req.target)
+
+
+@app.post("/api/court/{session_id}/factors")
+def court_factors(session_id: str, req: FactorReq):
+    return _court(court.factor, session_id, req.text, req.kind, req.factor_id, req.active)
+
+
+@app.post("/api/court/{session_id}/respond")
+def court_respond(session_id: str):
+    return _court(court.respond, session_id)
 
 
 @app.post("/api/court/{session_id}/note")
