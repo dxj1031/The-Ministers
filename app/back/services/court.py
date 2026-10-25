@@ -251,7 +251,13 @@ def open_court(topic: str, context: str = "", lang: str = "zh",
          {"role": "user", "content": prompt}],
         op="stance", session_id=sid, max_tokens=3000, fallback=_fallback_open(topic, lang))
 
-    mins = _as_dict(data.get("ministers"))
+    # Some compatible models return the minister map directly rather than under
+    # the requested "ministers" key. Preserve the actual arguments in either form.
+    mins = _as_dict(data.get("ministers", data))
+    if not all(isinstance(mins.get(mid), dict) for mid in roster.DEBATERS):
+        store.add_trace("stance_shape", llm.MODEL, session_id=sid, ok=False, fallback=True,
+                        error="Opening response omitted required minister objects.")
+        mins = _fallback_open(topic, lang)["ministers"]
     for mid in roster.DEBATERS:
         m = _as_dict(mins.get(mid))
         stance = m.get("stance") if m.get("stance") in STANCES else "undecided"
@@ -775,7 +781,7 @@ def snapshot(session_id: str) -> dict:
         "lean_open": s["lean_open"], "echo_out": bool(s["echo_out"]),
         "round": rounds, "rounds_left": max(0, ROUNDS_PER_SESSION - rounds),
         "fallback": any(t["fallback"] for t in store.list_traces(session_id)
-                        if t["op"] in ("stance", "speak", "reply", "verdict")),
+                        if t["op"].removesuffix("_parse").removesuffix("_shape") in ("stance", "speak", "reply", "verdict")),
         "factors": s.get("factors", []), "alliances": _alliances(s["turns"]),
         "tally": _tally(stances),
         # 谏言是对已有发言的一个视角，不是新内容，所以不落 turn 表：

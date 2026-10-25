@@ -1908,9 +1908,9 @@ class Component extends DCLogic {
     const T_ZH = {
       epChip:'EP.108 · 每日一集',
       titleFont:"400 100px/0.98 " + D, title1:'众卿', title2:'议事',
-      subFont:"400 20px/1.4 " + D, sub1:'一部每天上朝的荒诞喜剧，', sub2:'主演：十一位不靠谱大臣。',
+      subFont:"400 20px/1.4 " + D, sub1:'一部每天上朝的荒诞喜剧，', sub2:'主演：十二位不靠谱朝臣。',
       sealText:'朕即真理', statusLine:'正在开庭 · 卿等速来',
-      axis:'猫皇御前・十一大臣・吵完就裁', axisSize:'16px', axisSpacing:'7px',
+      axis:'猫皇御前・十二朝臣・吵完就裁', axisSize:'16px', axisSpacing:'7px',
       ticker:'上朝 ▸ 有事启奏 ▸ 御前辩论 ▸ 无事退朝 ▸ 卿等平身 ▸ 上朝 ▸ 有事启奏 ▸ 御前辩论 ▸ 无事退朝 ▸ 卿等平身 ▸ ',
       ctaSpacing:'6px', cta1Main:'上朝！', cta1Sub:'御门已开',
       castKicker:'INDEX — 名冊', castChip:'十一位大臣 + 一位应声',
@@ -1941,7 +1941,7 @@ class Component extends DCLogic {
       ticketByline:'跺脚将军 · 本集 MVP · 说服两位同僚倒戈', rareTag:'稀有',
       collectMain:'收入卡册', tomorrow:'明日再朝', langTip:'Switch to English',
       stampChar:'吵', stampFont:"400 30px/1 'ZCOOL KuaiLe',sans-serif", stickerTag:'荒诞认证',
-      railHead:'今日吵什么？', railSub:'十一大臣・吵完就裁',
+      railHead:'今日吵什么？', railSub:'十二朝臣・吵完就裁',
       throneTag:'YOU · 猫皇', tapHint:'点一点大臣，听他嘀咕',
       lobbyBanner:'游说进行中…', whisperA:'「跟我走，有小鱼干…」', whisperB:'「回来！赢了请你喝鱼汤」', lobThought:'「有道理…！」',
       itvTitle:'圣意如何？', itvSub:'INTERVENE', itvCancel:'再看看 ↓', silenceCry:'肃静！！',
@@ -1966,9 +1966,9 @@ class Component extends DCLogic {
     const T_EN = {
       epChip:'EP.108 · A DAILY SHOW',
       titleFont:"400 68px/1.02 " + D, title1:'COURT', title2:'IS ON!',
-      subFont:"400 18px/1.35 " + D, sub1:'A COURTROOM COMEDY, STARRING', sub2:'ELEVEN TERRIBLE ADVISORS.',
+      subFont:"400 18px/1.35 " + D, sub1:'A COURTROOM COMEDY, STARRING', sub2:'TWELVE TERRIBLE ADVISORS.',
       sealText:'I AM LAW', statusLine:'COURT IS IN SESSION',
-      axis:'THE CAT EMPEROR · 11 MINISTERS · VERDICT DAILY', axisSize:'11px', axisSpacing:'3px',
+      axis:'THE CAT EMPEROR · 12 COURTIERS · VERDICT DAILY', axisSize:'11px', axisSpacing:'3px',
       ticker:'COURT IS ON ▸ HEAR YE ▸ NO MERCY, ONLY MEMOS ▸ ALL RISE ▸ COURT IS ON ▸ HEAR YE ▸ NO MERCY, ONLY MEMOS ▸ ALL RISE ▸ ',
       ctaSpacing:'1.5px', cta1Main:'TO COURT!', cta1Sub:'THE GATES ARE OPEN',
       castKicker:'INDEX — THE CAST', castChip:'11 MINISTERS + 1 YES-MAN',
@@ -1999,7 +1999,7 @@ class Component extends DCLogic {
       ticketByline:'GEN. THUMP · EPISODE MVP · FLIPPED TWO VOTES', rareTag:'RARE',
       collectMain:'COLLECT', tomorrow:'BACK TOMORROW', langTip:'切换到中文',
       stampChar:'OY!', stampFont:"400 15px/1 'Lilita One',sans-serif", stickerTag:'CERTIFIED SILLY',
-      railHead:"TODAY'S FUSS?", railSub:'11 MINISTERS · 1 VERDICT',
+      railHead:"TODAY'S FUSS?", railSub:'12 COURTIERS · 1 VERDICT',
       throneTag:'YOU · EMPEROR', tapHint:'TAP A MINISTER',
       lobbyBanner:'LOBBYING…', whisperA:'"COME — I HAVE SARDINES…"', whisperB:'"COME BACK — FISH SOUP ON ME!"', lobThought:'"FAIR POINT…!"',
       itvTitle:'YOUR WILL, SIRE?', itvSub:'插手', itvCancel:'JUST WATCHING ↓', silenceCry:'SILENCE!!',
@@ -2105,7 +2105,7 @@ class Component extends DCLogic {
     return {
       scr1: s === 1, scr2: s === 2, scr3: s === 3, scr4Live: s === 4 && !!L, scr5: s === 5 && !!L,
       noCourt: !L && s >= 4,
-      noticeOn: !!this.state.err || (!L && s >= 4),
+      noticeOn: !this.state.accessRequired && (!!this.state.err || (!L && s >= 4)),
       noticeText: this.state.err || (this.state.phase === 'opening'
         ? (zh ? '众卿正在阅读奏章，请稍候……' : 'The ministers are reading your petition…')
         : (zh ? '请先呈递奏章，开堂后才会出现真实发言。' : 'Submit a petition to hear the ministers.')),

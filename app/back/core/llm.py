@@ -17,7 +17,9 @@ BASE_URL = (os.environ.get("MINISTERS_BASE_URL")
             or "https://api.openai.com/v1").rstrip("/")
 API_KEY = os.environ.get("MINISTERS_API_KEY") or os.environ.get("OPENAI_API_KEY", "")
 MODEL = os.environ.get("MINISTERS_MODEL", "gpt-4o-mini")
-EMBED_MODEL = os.environ.get("MINISTERS_EMBED_MODEL", "text-embedding-3-small")
+EMBED_MODEL = os.environ.get("MINISTERS_EMBED_MODEL") or (
+    "gemini-embedding-2" if BASE_URL.startswith("https://generativelanguage.googleapis.com/")
+    else "text-embedding-3-small")
 TIMEOUT = float(os.environ.get("MINISTERS_TIMEOUT", "30"))
 
 # USD / 1M tokens，(输入, 输出)。前缀匹配，未知模型算 0 并在监控台显示 unpriced。
@@ -101,6 +103,13 @@ def complete_json(messages: list[dict], *, fallback: dict, **kw) -> tuple[dict, 
                          fallback=json.dumps(fallback, ensure_ascii=False), **kw)
     try:
         out = json.loads(text)
+        # Gemini's compatibility endpoint can wrap one object in a JSON array.
+        # Unwrap only that unambiguous case; arbitrary arrays still fail below.
+        if isinstance(out, list) and len(out) == 1 and isinstance(out[0], dict):
+            out = out[0]
+            store.add_trace(kw.get("op", "call") + "_normalize", kw.get("model") or MODEL,
+                            session_id=kw.get("session_id"), minister=kw.get("minister"),
+                            response="Unwrapped a single JSON object from an array.")
         if not isinstance(out, dict):
             raise ValueError("不是 JSON 对象")
         return out, tid
