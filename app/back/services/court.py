@@ -254,6 +254,7 @@ def open_court(topic: str, context: str = "", lang: str = "zh",
     read_user(sid)
     s = store.get_session(sid)
     research.prepare(s)
+    research.require_public(s)
     sources = {**_sources(s), **research.sources(s, roster.DEBATERS)}
     prompt = (f"议题：{topic}\n背景：{context or '（无）'}\n\n大臣名册：\n{roster.roster_block(lang)}\n\n"
               + _private_block(roster.DEBATERS, lang, sid)
@@ -349,6 +350,7 @@ def next_round(session_id: str) -> dict:
     if rnd == 0 and roster.PARROT in rest:
         floor = [roster.PARROT] + [m for m in floor if m != roster.PARROT][:1]
     research.prepare(s)
+    research.require_public(s)
     sources = {**_sources(s), **research.sources(s, list(duel or ()) + list(lob or ()) + floor)}
     allies = [p for p in _alliances(s["turns"]) if all(m in stances for m in p)]
     pressure = 0.0

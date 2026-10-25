@@ -741,6 +741,7 @@
   <sc-if value="{{ noticeOn }}">
     <div role="status" style="position:absolute; top:8px; left:12px; right:40px; z-index:55; padding:12px; border:2px solid #b2a181; border-radius:12px; background:#2b2733; color:#f1ede4; font:600 14px/1.5 sans-serif; overflow-wrap:anywhere;">{{ noticeText }}
       <sc-if value="{{ noCourt }}"><button onClick="{{ go3 }}" style="display:block; margin-top:12px; padding:10px; cursor:pointer;">{{ petitionLabel }}</button></sc-if>
+      <sc-if value="{{ researchRetryOn }}"><button onClick="{{ startCourt }}" style="display:block; margin-top:12px; padding:10px; cursor:pointer;">{{ researchRetryLabel }}</button></sc-if>
     </div>
   </sc-if>
   <sc-if value="{{ legacyNavOn }}">
@@ -885,7 +886,11 @@ class Component extends DCLogic {
       this.setState({accessRequired:true});
       throw new Error(this.state.lang === 'zh' ? '请先输入朝堂访问口令。' : 'Enter the court access password first.');
     }
-    if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+    if (!r.ok) {
+      let message = await r.text();
+      try { const data = JSON.parse(message); if (typeof data.detail === 'string') message = data.detail; } catch (_) {}
+      throw new Error(message.slice(0, 400));
+    }
     return r.json();
   }
 
@@ -923,7 +928,7 @@ class Component extends DCLogic {
       this.acceptSnapshot(s);
     } catch (e) {
       if (run !== this._run) return;
-      this.setState({ phase: 'offline', err: zh ? '朝堂暂不可用。请稍后重试；线上服务首次唤醒可能需要约一分钟。' : 'Court unavailable. Retry shortly; waking the hosted service can take about a minute.' });
+      this.setState({ phase: 'offline', err: /^(公开资料|Public research)/.test(e.message || '') ? e.message : (zh ? '朝堂暂不可用。请稍后重试；线上服务首次唤醒可能需要约一分钟。' : 'Court unavailable. Retry shortly; waking the hosted service can take about a minute.') });
     }
   }
 
@@ -2196,6 +2201,8 @@ class Component extends DCLogic {
         ? (zh ? '众卿正在阅读奏章，请稍候……' : 'The ministers are reading your petition…')
         : (zh ? '请先呈递奏章，开堂后才会出现真实发言。' : 'Submit a petition to hear the ministers.')),
       petitionLabel: zh ? '返回奏章' : 'BACK TO PETITION',
+      researchRetryOn: !L && this.state.phase === 'offline' && /^(公开资料|Public research)/.test(this.state.err || ''),
+      researchRetryLabel: zh ? '重新查资料' : 'RETRY PUBLIC RESEARCH',
       exportLabel: zh ? '下载本场记录' : 'SAVE COURT RECORD',
       exportDisabled: !L || L.status !== 'decided',
       ruleDisabled: !canRule,

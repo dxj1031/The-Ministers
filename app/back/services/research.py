@@ -33,12 +33,19 @@ def relevant(topic: str, text: str) -> bool:
     """Reject lexical noise such as a dictionary entry for the topic's first word."""
     stop = set("a an the at to of is or and in for on i my should do does it be starting start brave fleeing".split())
     tokens = {t for t in re.findall(r"[a-z0-9]+", topic.lower()) if t not in stop}
-    for phrase in re.findall(r"[\u4e00-\u9fff]+", topic):
+    chinese_topic = re.sub(r"要不要|该不该|是不是|有没有|是否|还是|勇敢|逃避|勇耶|逃耶", " ", topic)
+    chinese_topic = chinese_topic.replace("三十岁", "30岁").replace("三十", "30")
+    chinese_text = text.replace("三十岁", "30岁").replace("三十", "30")
+    for phrase in re.findall(r"[\u4e00-\u9fff]+", chinese_topic):
+        if len(phrase) < 2:
+            continue
         tokens.update(phrase[i:i + 2] for i in range(max(1, len(phrase) - 1)))
-    content = text.lower()
+    tokens.update(re.findall(r"\d+", chinese_topic))
+    content = chinese_text.lower()
     matched = sum(bool(re.search(r"\b" + re.escape(t) + r"\b", content))
                   if re.fullmatch(r"[a-z0-9]+", t) else t in content for t in tokens)
-    return bool(tokens) and matched >= min(len(tokens), max(2, len(tokens) * .4))
+    required = min(len(tokens), 2) if re.search(r"[\u4e00-\u9fff]", topic) else min(len(tokens), max(2, len(tokens) * .4))
+    return bool(tokens) and matched >= required
 
 
 def public_reactions(topic: str, minister: str) -> tuple[str, list[dict]]:
@@ -99,7 +106,26 @@ def prepare(session: dict) -> None:
     if os.environ.get("MINISTERS_WEB_RESEARCH", "1") == "0":
         return
     previous = store.list_retrievals(session["id"])
-    if any(r["vectorizer"] == "web_google" for r in previous):
+    if any(r["vectorizer"] in ("web_google", "web_tavily") for r in previous):
+        return
+    if os.environ.get("MINISTERS_SEARCH_API_KEY"):
+        # Three complementary searches, shared by all voices; no twelvefold duplicate billing.
+        pending = [m for m in ("fox", "rabbit", "octopus")
+                   if not any(r["minister"] == m and r["vectorizer"].startswith("web_tavily") for r in previous)]
+        def tavily(mid):
+            try:
+                query, hits = public_reactions(session["topic"], mid)
+                return mid, query, hits, "web_tavily" if hits else "web_tavily_empty"
+            except (httpx.HTTPError, ValueError, AttributeError, TypeError):
+                return mid, session["topic"], [], "web_tavily_unavailable"
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            for mid, query, hits, status in pool.map(tavily, pending):
+                for hit in hits:
+                    text = hit["title"] + " — " + hit["text"]
+                    if not store.fact_exists(session["id"], text):
+                        store.add_fact(text, session_id=session["id"], source="public:shared:" + hit["url"])
+                store.add_retrieval(query, session_id=session["id"], minister=mid,
+                                    vectorizer=status, corpus=len(hits), hits=hits)
         return
     if store.count_traces(session["id"], "research") < 2:
         hits = llm.search_public(session["topic"], session_id=session["id"])
@@ -131,6 +157,21 @@ def prepare(session: dict) -> None:
                                source=f'public:{mid}:{hit["url"]}')
             store.add_retrieval(query, session_id=session["id"], minister=mid,
                                 vectorizer=status, hits=hits, corpus=len(hits), latency_ms=elapsed)
+
+
+def require_public(session: dict) -> None:
+    """Hosted evidence-first discussions must not proceed with an empty web corpus."""
+    if not os.environ.get("RENDER") or os.environ.get("MINISTERS_WEB_RESEARCH", "1") == "0":
+        return
+    if any(f["source"].startswith("public:") for f in store.list_facts(session["id"])):
+        return
+    quota = any(t["op"] == "research" and "HTTP 429" in (t["error"] or "")
+                for t in store.list_traces(session["id"]))
+    if session["lang"] == "zh":
+        reason = "Google Search 当前配额不足（HTTP 429），备用搜索没有相关结果" if quota else "暂未找到可用的相关公开来源"
+        raise ValueError("公开资料检索未完成：" + reason + "。本场暂不生成无依据发言。请恢复搜索配额、配置可用搜索服务，或稍后重新查资料。")
+    reason = "Google Search quota is unavailable (HTTP 429) and fallback search found no relevant results" if quota else "no relevant public sources are available"
+    raise ValueError("Public research incomplete: " + reason + ". Debate has not started. Restore search access or retry research later.")
 
 
 def sources(session: dict, ministers) -> dict:

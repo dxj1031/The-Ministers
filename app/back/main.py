@@ -172,7 +172,7 @@ def _court(fn, *a):
 
 @app.post("/api/court")
 def open_court(req: OpenReq):
-    return court.open_court(req.topic.strip(), req.context.strip(), req.lang, req.lean_open)
+    return _court(court.open_court, req.topic.strip(), req.context.strip(), req.lang, req.lean_open)
 
 
 @app.get("/api/court/{session_id}")

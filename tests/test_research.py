@@ -24,6 +24,8 @@ def main():
     assert not research.relevant("starting a PhD at 30", "STARTING dictionary definition")
     assert not research.relevant("PhD 30", "300 PhD students")
     assert research.relevant("starting a PhD at 30", "I started a PhD at 30 and worried about funding")
+    assert research.relevant("三十岁读博，是勇敢还是逃避？", "30岁读博要考虑机会成本")
+    assert not research.relevant("三十岁读博，是勇敢还是逃避？", "30 is a number")
     response = httpx.Response(200, request=httpx.Request("GET", "https://www.bing.com/search"),
         content=b'<rss><channel><item><title>Starting a PhD at 30</title>'
                 b'<description>PhD at 30: I feared the opportunity cost.</description>'
@@ -91,6 +93,22 @@ def main():
     for mid in research.ANGLES:
         assert any(v.get("url") == "https://example.org/tattoo" for v in research.sources(shared, [mid]).values())
     assert court.snapshot(shared["id"])["research"][0]["hits"] == 1
+    tavily_session = store.get_session(store.create_session("三十岁读博，是勇敢还是逃避？"))
+    with patch.dict(os.environ, {"MINISTERS_WEB_RESEARCH": "1", "MINISTERS_SEARCH_API_KEY": "test-key"}), \
+            patch.object(research.llm, "search_public") as google, patch.object(research, "public_reactions", return_value=("30岁读博", hits)) as search:
+        research.prepare(tavily_session)
+        assert search.call_count == 3
+        google.assert_not_called()
+    for mid in research.ANGLES:
+        assert any(v.get("url") for v in research.sources(tavily_session, [mid]).values())
+    blocked = store.get_session(store.create_session("没有公开资料"))
+    store.add_trace("research", "test", session_id=blocked["id"], ok=False, error="HTTP 429: quota")
+    with patch.dict(os.environ, {"RENDER": "true", "MINISTERS_WEB_RESEARCH": "1"}):
+        try:
+            research.require_public(blocked)
+            raise AssertionError("An empty hosted research corpus must not produce a debate")
+        except ValueError as exc:
+            assert "HTTP 429" in str(exc)
     grounded = httpx.Response(200, request=httpx.Request("POST", "https://generativelanguage.googleapis.com/test"), json={
         "candidates": [{"content": {"parts": [{"text": "An uncited invented claim must not become evidence."}]},
                         "groundingMetadata": {"webSearchQueries": ["parents tattoos discussion"],

@@ -120,6 +120,12 @@ async function main() {
   await failed.startCourt();
   assert.equal(failed.state.phase,'offline'); assert.equal(failed.renderVals().scr4Live,false);
   assert(!failed.state.live); assert(failed.renderVals().noticeText.includes('朝堂暂不可用'));
+  const researchBlocked=new Court(); researchBlocked.setState({topic:'无来源议题',lang:'zh'});
+  researchBlocked.api=async()=>{throw new Error('公开资料检索未完成：搜索配额不足（HTTP 429）');};
+  await researchBlocked.startCourt();
+  assert(researchBlocked.renderVals().noticeText.includes('HTTP 429'));
+  assert.equal(researchBlocked.renderVals().researchRetryOn,true);
+  assert.equal(researchBlocked.state.live,null,'A search failure must not become twelve unsupported speeches');
 
   const stale=new Court(); stale.setState({topic:'旧议题'}); let resolve;
   stale.api=()=>new Promise(r=>{resolve=r;}); const request=stale.startCourt();
