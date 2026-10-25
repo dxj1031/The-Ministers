@@ -348,6 +348,7 @@ def next_round(session_id: str) -> dict:
     # First group debate visibly includes Echo unless it is already duelling or lobbying.
     if rnd == 0 and roster.PARROT in rest:
         floor = [roster.PARROT] + [m for m in floor if m != roster.PARROT][:1]
+    research.prepare(s)
     sources = {**_sources(s), **research.sources(s, list(duel or ()) + list(lob or ()) + floor)}
     allies = [p for p in _alliances(s["turns"]) if all(m in stances for m in p)]
     pressure = 0.0

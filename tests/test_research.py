@@ -102,8 +102,17 @@ def main():
         native_hits = research.llm.search_public(shared["topic"], session_id=shared["id"])
         assert len(native_hits) == 1 and native_hits[0]["url"] == "https://example.org/actual"
         assert "uncited" not in native_hits[0]["text"]
-        assert native.call_args.kwargs["json"]["tools"] == [{"googleSearch": {}}]
+        assert native.call_args.kwargs["json"]["tools"] == [{"type": "google_search"}]
         assert store.list_traces(shared["id"])[-1]["op"] == "research"
+    cited_text = "Some participants worry about family expectations."
+    interactions = httpx.Response(200, request=httpx.Request("POST", "https://generativelanguage.googleapis.com/test"), json={
+        "steps": [{"type": "google_search_call", "arguments": {"queries": ["parents tattoos"]}},
+                  {"type": "model_output", "content": [{"type": "text", "text": cited_text,
+                    "annotations": [{"type": "url_citation", "url": "https://example.org/cited", "title": "Discussion",
+                                     "start_index": 0, "end_index": len(cited_text)}]}]}]})
+    with patch.object(research.llm, "BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"), \
+            patch.object(research.llm, "API_KEY", "test-key"), patch.object(research.llm.httpx, "post", return_value=interactions):
+        assert research.llm.search_public(shared["topic"], session_id=shared["id"])[0]["text"] == cited_text
     failed = store.get_session(store.create_session("PhD at 30"))
     with patch.dict(os.environ, {"MINISTERS_WEB_RESEARCH": "1"}), patch.object(research, "public_reactions", side_effect=httpx.ConnectError("offline")):
         research.prepare(failed)

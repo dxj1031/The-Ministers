@@ -57,16 +57,38 @@ def search_public(topic: str, *, session_id: str) -> list[dict]:
     started = time.perf_counter()
     try:
         response = httpx.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent",
+            "https://generativelanguage.googleapis.com/v1beta/interactions",
             headers={"x-goog-api-key": API_KEY},
-            json={"contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                  "tools": [{"googleSearch": {}}],
-                  "generationConfig": {"maxOutputTokens": 2400, "temperature": 0.2}},
+            json={"model": MODEL, "input": prompt + "\n研究笔记控制在800字以内。",
+                  "tools": [{"type": "google_search"}], "store": False},
             timeout=min(TIMEOUT, 60))
         response.raise_for_status()
         data = response.json()
         candidate = (data.get("candidates") or [{}])[0]
         metadata = candidate.get("groundingMetadata") or {}
+        # Interactions attaches provider citations directly to output text spans.
+        # Keep generateContent-style metadata parsing for compatible responses.
+        chunks, supports, queries = [], [], []
+        blocks = list(data.get("outputs") or [])
+        for step in data.get("steps") or []:
+            if step.get("type") == "model_output":
+                blocks.extend(step.get("content") or [])
+            elif step.get("type") == "google_search_call":
+                queries.extend((step.get("arguments") or {}).get("queries") or [])
+        for block in blocks:
+            if block.get("type") != "text":
+                continue
+            text = block.get("text", "")
+            for annotation in block.get("annotations") or []:
+                if annotation.get("type") != "url_citation":
+                    continue
+                start, end = annotation.get("start_index"), annotation.get("end_index")
+                if not isinstance(start, int) or not isinstance(end, int) or not 0 <= start < end <= len(text):
+                    continue
+                chunks.append({"web": {"uri": annotation.get("url", ""), "title": annotation.get("title", "")}})
+                supports.append({"segment": {"text": text[start:end]}, "groundingChunkIndices": [len(chunks) - 1]})
+        if chunks:
+            metadata = {"groundingChunks": chunks, "groundingSupports": supports, "webSearchQueries": queries}
         chunks = metadata.get("groundingChunks") or []
         hits = {}
         for support in metadata.get("groundingSupports") or []:
@@ -83,7 +105,7 @@ def search_public(topic: str, *, session_id: str) -> list[dict]:
                 hit = hits.setdefault(url, {"title": web.get("title", ""), "url": url, "text": ""})
                 if text not in hit["text"]:
                     hit["text"] = (hit["text"] + " " + text).strip()[:1800]
-        usage = data.get("usageMetadata") or {}
+        usage = data.get("usageMetadata") or data.get("usage") or {}
         store.add_trace("research", MODEL, session_id=session_id,
                         prompt_tokens=usage.get("promptTokenCount", 0),
                         completion_tokens=usage.get("candidatesTokenCount", 0),
@@ -92,9 +114,16 @@ def search_public(topic: str, *, session_id: str) -> list[dict]:
                                                              "sources": list(hits.values())}, ensure_ascii=False))
         return list(hits.values())[:10]
     except (httpx.HTTPError, ValueError, TypeError, AttributeError, IndexError) as exc:
+        error = f"{type(exc).__name__}: public web research unavailable"
+        if isinstance(exc, httpx.HTTPStatusError):
+            try:
+                message = exc.response.json().get("error", {}).get("message", "")
+            except (ValueError, AttributeError):
+                message = ""
+            error = f"HTTP {exc.response.status_code}: {message[:240]}"
         store.add_trace("research", MODEL, session_id=session_id, ok=False,
                         latency_ms=int((time.perf_counter() - started) * 1000),
-                        error=f"{type(exc).__name__}: public web research unavailable", request=prompt)
+                        error=error, request=prompt)
         return []
 
 

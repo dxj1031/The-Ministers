@@ -101,7 +101,7 @@ def prepare(session: dict) -> None:
     previous = store.list_retrievals(session["id"])
     if any(r["vectorizer"] == "web_google" for r in previous):
         return
-    if not previous:
+    if store.count_traces(session["id"], "research") < 2:
         hits = llm.search_public(session["topic"], session_id=session["id"])
         if hits:
             for hit in hits:
