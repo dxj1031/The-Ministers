@@ -240,6 +240,8 @@ async function main() {
   assert(echoView.emperorTargets.some(t=>t.value==='parrot'),'The emperor can address Echo');
   assert(echoView.groupRows.some(t=>t.name==='应声'),'Echo joins the group chat');
   echoCourt.animateTurn(echo,{stance:'pro'}); assert.equal(echoCourt.state.cut.id,'parrot');
+  echo.detail.basis='public_reaction';
+  assert(echoCourt.renderVals().transcript.some(q=>q.basis.includes('公开讨论摘要')));
   echoCourt.closeStream();
   wall.closeStream();
   console.log('frontend OK: ordered opening/rebuttal playback, event animations, pause, decree, narrow transcript, verdict, offline, stale requests, retry recovery');

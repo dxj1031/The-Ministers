@@ -2468,7 +2468,15 @@ class Component extends DCLogic {
             meta: bits.join(' · '),
             text: q.text, anchor:'turn-' + q.seq,
             reason:(q.detail || {}).reason || '', evidence:(q.detail || {}).evidence || '',
-            basis:zh ? '猫皇提供的输入原文，非独立核验' : 'INPUT QUOTATION, NOT INDEPENDENTLY VERIFIED',
+            basis: (zh ? {
+              public_reaction:'公开讨论摘要，非公众共识／独立核验',
+              public_material:'公开资料摘要，非独立核验', user_library:'用户文库原文，非独立核验',
+              unverified:'论点含未经材料支持的说法，需核实',
+            } : {
+              public_reaction:'PUBLIC DISCUSSION SNIPPET — NOT PUBLIC CONSENSUS',
+              public_material:'PUBLIC MATERIAL SNIPPET — UNVERIFIED', user_library:'USER LIBRARY — UNVERIFIED',
+              unverified:'ARGUMENT CONTAINS UNSUPPORTED CLAIMS',
+            })[(q.detail || {}).basis] || (zh ? '猫皇提供的输入原文，非独立核验' : 'INPUT QUOTATION, NOT INDEPENDENTLY VERIFIED'),
             stance: emp ? '#f1ede4' : (stColor[q.stance] || '#847d88'),
             rowBg: emp ? 'rgba(164,114,106,.32)' : 'rgba(241,237,228,.05)',
             nameCol: emp ? '#f1ede4' : '#b2a181',
