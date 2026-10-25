@@ -104,12 +104,12 @@ def main():
         assert "uncited" not in native_hits[0]["text"]
         assert native.call_args.kwargs["json"]["tools"] == [{"type": "google_search"}]
         assert store.list_traces(shared["id"])[-1]["op"] == "research"
-    cited_text = "Some participants worry about family expectations."
+    cited_text = "部分公开讨论者担心家庭期待与经济成本。"
     interactions = httpx.Response(200, request=httpx.Request("POST", "https://generativelanguage.googleapis.com/test"), json={
         "steps": [{"type": "google_search_call", "arguments": {"queries": ["parents tattoos"]}},
                   {"type": "model_output", "content": [{"type": "text", "text": cited_text,
                     "annotations": [{"type": "url_citation", "url": "https://example.org/cited", "title": "Discussion",
-                                     "start_index": 0, "end_index": len(cited_text)}]}]}]})
+                                     "start_index": 0, "end_index": len(cited_text.encode('utf-8'))}]}]}]})
     with patch.object(research.llm, "BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"), \
             patch.object(research.llm, "API_KEY", "test-key"), patch.object(research.llm.httpx, "post", return_value=interactions):
         assert research.llm.search_public(shared["topic"], session_id=shared["id"])[0]["text"] == cited_text

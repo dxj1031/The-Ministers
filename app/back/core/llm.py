@@ -79,14 +79,19 @@ def search_public(topic: str, *, session_id: str) -> list[dict]:
             if block.get("type") != "text":
                 continue
             text = block.get("text", "")
+            encoded = text.encode("utf-8")
             for annotation in block.get("annotations") or []:
                 if annotation.get("type") != "url_citation":
                     continue
                 start, end = annotation.get("start_index"), annotation.get("end_index")
-                if not isinstance(start, int) or not isinstance(end, int) or not 0 <= start < end <= len(text):
+                if not isinstance(start, int) or not isinstance(end, int) or not 0 <= start < end <= len(encoded):
+                    continue
+                try:
+                    cited_text = encoded[start:end].decode("utf-8")
+                except UnicodeDecodeError:
                     continue
                 chunks.append({"web": {"uri": annotation.get("url", ""), "title": annotation.get("title", "")}})
-                supports.append({"segment": {"text": text[start:end]}, "groundingChunkIndices": [len(chunks) - 1]})
+                supports.append({"segment": {"text": cited_text}, "groundingChunkIndices": [len(chunks) - 1]})
         if chunks:
             metadata = {"groundingChunks": chunks, "groundingSupports": supports, "webSearchQueries": queries}
         chunks = metadata.get("groundingChunks") or []
