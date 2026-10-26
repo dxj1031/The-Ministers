@@ -862,10 +862,10 @@
 <script type="text/x-dc" data-dc-script data-props="{
   &quot;$preview&quot;: { &quot;width&quot;: 390, &quot;height&quot;: 844 },
   &quot;startScreen&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;opening&quot;, &quot;cast&quot;, &quot;petition&quot;, &quot;debate&quot;, &quot;verdict&quot;], &quot;default&quot;: &quot;opening&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;预览&quot; },
-  &quot;lang&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;zh&quot;, &quot;en&quot;], &quot;default&quot;: &quot;zh&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;语言&quot; }
+  &quot;lang&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;zh&quot;, &quot;en&quot;], &quot;default&quot;: &quot;en&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;语言&quot; }
 }">
 class Component extends DCLogic {
-  state = { screen: 1, lang: 'zh', duelTurn: 0, poke: null, lobPhase: 0, lobSc: 'A', fishCamp: 'pro', rotTick: 0, itvOpen: false, itv: null, castPoke: null, pairIdx: 0, cut: null,
+  state = { screen: 1, lang: 'en', duelTurn: 0, poke: null, lobPhase: 0, lobSc: 'A', fishCamp: 'pro', rotTick: 0, itvOpen: false, itv: null, castPoke: null, pairIdx: 0, cut: null,
             topic: '', ctx: '', sid: null, live: null, feed: [], phase: 'idle', err: '', wide: false,
             mindEdit: {},    // 心事的本地草稿：没按「改定」之前不发给后端
             leanOpen: 0,     // 递奏章时的倾向，开堂那一下送出去，之后不再问
@@ -1300,7 +1300,7 @@ class Component extends DCLogic {
     try { lang = localStorage.getItem('mm_lang'); } catch (e) {}
     const requestedLang = typeof location !== 'undefined' && typeof URLSearchParams !== 'undefined'
       ? new URLSearchParams(location.search).get('lang') : null;
-    lang = ['zh', 'en'].includes(requestedLang) ? requestedLang : (lang || this.props.lang || 'zh');
+    lang = ['zh', 'en'].includes(requestedLang) ? requestedLang : (lang || this.props.lang || 'en');
     if (lang === 'en' || lang === 'zh') this.setState({ lang });
     // 表演由发言与圣旨触发，不再按固定时间循环播放演示剧本。
     this._mq = window.matchMedia('(min-width:1024px)');

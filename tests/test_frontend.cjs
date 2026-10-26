@@ -25,13 +25,18 @@ const snapshot = (turns, round=0) => ({id:'s1', topic:'要不要读博', status:
 const flush = async () => { for(let i=0;i<12;i++) await Promise.resolve(); };
 async function tick(c) { const id=c._playT; assert(timers.has(id)); const fn=timers.get(id); timers.delete(id); fn(); await flush(); }
 async function main() {
-  assert.equal(new Court().state.lang,'zh','A fresh court defaults to Chinese');
+  assert.equal(new Court().state.lang,'en','A fresh court defaults to English');
   context.URLSearchParams=URLSearchParams;
   context.location={protocol:'https:',hostname:'court.example',search:'?lang=zh'};
   context.localStorage.getItem=()=> 'en';
   const chineseEntry=new Court(); chineseEntry.componentDidMount();
   assert.equal(chineseEntry.state.lang,'zh','A Chinese entry overrides an old English preference');
   chineseEntry.componentWillUnmount();
+  context.location.search='?lang=en';
+  context.localStorage.getItem=()=> 'zh';
+  const englishEntry=new Court(); englishEntry.componentDidMount();
+  assert.equal(englishEntry.state.lang,'en','An English entry overrides an old Chinese preference');
+  englishEntry.componentWillUnmount();
   context.localStorage.getItem=()=> 'zh';
   context.location={protocol:'https:',hostname:'court.example'};
   const locked=new Court();
@@ -169,7 +174,7 @@ async function main() {
   assert.equal(pending.state.activeTurn.seq,3);
   assert.equal(pending.renderVals().pausedClass,'mm-paused');
   assert.equal(pending._queue.length,1);
-  assert.equal(pending.renderVals().actNo,'开场陈词','Paused progress follows played turns, not a future snapshot');
+  assert.equal(pending.renderVals().actNo,'OPENING STATEMENTS','Paused progress follows played turns, not a future snapshot');
   pending.togglePlayback(); assert.equal(pending.state.activeTurn.seq,4);
   const staleCallback=timers.get(pending._playT);
   pending.pausePlayback(); pending.togglePlayback(); staleCallback();
