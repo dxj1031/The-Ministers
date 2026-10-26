@@ -25,6 +25,14 @@ const snapshot = (turns, round=0) => ({id:'s1', topic:'要不要读博', status:
 const flush = async () => { for(let i=0;i<12;i++) await Promise.resolve(); };
 async function tick(c) { const id=c._playT; assert(timers.has(id)); const fn=timers.get(id); timers.delete(id); fn(); await flush(); }
 async function main() {
+  assert.equal(new Court().state.lang,'zh','A fresh court defaults to Chinese');
+  context.URLSearchParams=URLSearchParams;
+  context.location={protocol:'https:',hostname:'court.example',search:'?lang=zh'};
+  context.localStorage.getItem=()=> 'en';
+  const chineseEntry=new Court(); chineseEntry.componentDidMount();
+  assert.equal(chineseEntry.state.lang,'zh','A Chinese entry overrides an old English preference');
+  chineseEntry.componentWillUnmount();
+  context.localStorage.getItem=()=> 'zh';
   context.location={protocol:'https:',hostname:'court.example'};
   const locked=new Court();
   context.fetch=async()=>({status:401});
