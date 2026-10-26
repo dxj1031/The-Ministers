@@ -113,6 +113,14 @@ async function main() {
   assert.equal(unlimited.hasMoreRounds(unlimited.state.live),true);
   assert.equal(unlimited.renderVals().ruleDisabled,false);
   unlimited.navigate(5); assert.equal(unlimited.state.phase,'recess');
+  assert.equal(unlimited.renderVals().exportDisabled,false,'Unruled records can be saved');
+  unlimited.exportVerdict();
+  assert.equal(JSON.parse(await exportedBlob.text()).status,'debating','Saving never fabricates a verdict');
+  unlimited.navigate(1);
+  unlimited.navigate(4);
+  assert.equal(unlimited.state.phase,'debating','Returning before a ruling allows discussion to continue');
+  assert.equal(unlimited.state.paused,true,'Returning waits for the user to resume');
+  assert.equal(unlimited.renderVals().playbackDisabled,false);
   unlimited.closeStream();
 
   const failed=new Court(); failed.setState({topic:'另一个问题',lang:'zh'});
