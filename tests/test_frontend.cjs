@@ -161,7 +161,7 @@ async function main() {
   assert.equal(pending.state.activeTurn.seq,3);
   assert.equal(pending.renderVals().pausedClass,'mm-paused');
   assert.equal(pending._queue.length,1);
-  assert.equal(pending.renderVals().actNo,'OPENING STATEMENTS','Paused progress follows played turns, not a future snapshot');
+  assert.equal(pending.renderVals().actNo,'开场陈词','Paused progress follows played turns, not a future snapshot');
   pending.togglePlayback(); assert.equal(pending.state.activeTurn.seq,4);
   const staleCallback=timers.get(pending._playT);
   pending.pausePlayback(); pending.togglePlayback(); staleCallback();
