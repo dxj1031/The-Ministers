@@ -2,6 +2,14 @@
 
 本文件记录实际修改与验证；未完成的验证明确标注。时间按本机日期记录。不得记录 API Key、密码或环境变量值。
 
+## 2026-10-25：按用户最新要求改为默认英文
+
+1. 用户明确要求“改成默认英文”，覆盖上一节默认中文的偏好。
+2. 将朝堂组件初始状态、属性默认和无偏好时的回退语言改为 `en`。保留 `?lang=zh/en` 参数及页面语言切换。
+3. Personal Page 入口缺少语言参数时补 `lang=en`，保留其他参数与 hash；提交 `9f71240` 已推送。
+4. 朝堂提交 `f913c74` 已部署至 Render，部署 `dep-dbf9vcnb9u1s73c5f71g` 显示 `Deploy succeeded|Live`；前端回归测试及差异检查通过，测试包含英文入口覆盖旧中文偏好。
+5. 线上验收：Pages 带版本参数的新入口自动补 `lang=en`，页面显示 `COURT IS ON!`；手动切中文后再访问英文入口，恢复英文。截图 `data/personal-entry-english-f913c74.png`。无参数入口曾命中上一版中文缓存，因此补充将 Personal Page 主页面的实际按钮明确指向 `./ministers/?lang=en`（提交 `9ff92df`），该参数可穿过旧版缓存入口。明确的英文入口 `https://dxj1031.github.io/personal-page/ministers/?lang=en` 已在线验证。
+
 ## 2026-10-25：Personal Page 入口默认英文
 
 1. 定位：朝堂组件初始状态及编辑器属性默认值均为 `en`；Personal Page 重定向未携带语言参数；浏览器还可能保存过英文偏好。
